@@ -1,0 +1,3 @@
+[submodule "o-voxel/third_party/eigen"]
+	path = o-voxel/third_party/eigen
+	url = https://gitlab.com/libeigen/eigen.git
