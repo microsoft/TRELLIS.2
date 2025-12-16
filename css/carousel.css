@@ -1,0 +1,100 @@
+.x-carousel-tags {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: left;
+    flex-wrap: wrap;
+}
+
+.x-carousel-tag {
+    background-color: rgba(255, 255, 255, 0.15);
+    box-shadow: rgba(0, 0, 0, 0.15) 0px 0px 4px;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    color: white;
+    margin: 4px;
+    padding: 8px 16px;
+    text-align: center;
+}
+
+.x-carousel-tag:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+    transform: translateY(-2px);
+}
+
+.x-carousel-tag.active { border-color: #9f9f9f; background-color: rgba(255, 255, 255, 0.1); }
+
+.x-carousel-slider {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.x-carousel-slider-item {
+    max-width: 100%;
+    flex: 1 0 0;
+}
+
+.x-carousel-nav {
+    width: 100%;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.x-carousel-switch {
+    width: 50px;
+    height: 25px;
+    margin: 8px;
+    border-radius: 25px;
+    cursor: pointer;
+    user-select: none;
+    color: rgba(255, 255, 255, 0.25);
+    font-size: 24px;
+    font-weight: 500;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.x-carousel-switch:hover {
+    color: rgba(255, 255, 255, 0.75);
+    transform: scale(1.05);
+}
+
+.x-carousel-pages {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.x-carousel-page {
+    width: 10px;
+    height: 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.25);
+    /* background: linear-gradient(107.54deg, #0078d4 .39%, #8661c5 51.23%, #ff9349 100%) fixed; */
+    margin: 0 3px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.x-carousel-page:hover {
+    background: rgba(255, 255, 255, 0.75);
+}
+
+.x-carousel-page.x-carousel-page-active {
+    width: 12px;
+    height: 13px;
+}

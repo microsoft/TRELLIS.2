@@ -1,0 +1,530 @@
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>TRELLIS.2: Native and Compact Structured Latents for 3D Generation</title>
+        <link rel="icon" href="favicon.png">
+        <link rel="stylesheet" href="fonts/avenir-next/stylesheet.css">
+        <link rel="stylesheet" href="fonts/bardford/stylesheet.css">
+        <link rel="stylesheet" href="icons/style.css">
+        <link rel="stylesheet" href="css/window.css">
+        <link rel="stylesheet" href="css/carousel.css">
+        <link rel="stylesheet" href="css/main.css">
+        <link rel="stylesheet" href="css/pv.css">
+        <script src="js/window.js"></script>
+        <script src="js/carousel.js"></script>
+        <script src="js/generation.js"></script>
+        <script src="js/reconstruction.js"></script>
+		<script src="js/main.js"></script>
+		<script src="js/pv.js"></script>
+        <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+        <script>
+            function showFeature(index, colorName) {
+                // 1. Remove active class from all tabs
+                const tabs = document.querySelectorAll('.feature-tab');
+                tabs.forEach(tab => {
+                    // Remove color-specific classes
+                    tab.classList.remove('active-yellow', 'active-red', 'active-blue', 'active-purple');
+                });
+                // 2. Hide all content panels
+                const panels = document.querySelectorAll('.feature-panel');
+                panels.forEach(panel => panel.classList.remove('active'));
+                // 3. Add specific active class to clicked tab
+                tabs[index].classList.add('active-' + colorName);
+                // 4. Show the selected panel
+                panels[index].classList.add('active');
+            }
+
+            function scrollToVideo() {
+                window.scrollTo({
+                    top: 0.8 * window.innerHeight,
+                    behavior: 'smooth'
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                const indicator = document.getElementById('scroll-indicator');
+
+                function checkScroll() {
+                    if (window.scrollY > 20) {
+                        indicator.classList.add('hidden');
+                    } else {
+                        indicator.classList.remove('hidden');
+                    }
+                }
+
+                window.addEventListener('scroll', checkScroll);
+                
+                checkScroll();
+
+                indicator.addEventListener('click', scrollToVideo);
+            });
+        </script>
+    </head>
+    <body>
+        <div style="width: 100%; height: 80vh; position: relative; overflow: hidden">
+            <video autoplay playsinline loop muted src="assets/bg.mp4" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;"></video>
+            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5);">
+                <div style="height: 100%; margin-left: 12%; display: flex; flex-direction: column; justify-content: end; align-items: start; color: white;">
+                    <div style="font-size: 96px; font-weight: 300">
+                        T<span style="font-size: 72px; font-weight: 300">RELLIS</span>.2
+                    </div>
+                    <div style="font-size: 32px; font-weight: 100">
+                        NATIVE AND COMPACT STRUCTURED LATENTS FOR 3D GENERATION
+                    </div>
+                    <div id="links" style="margin-bottom: 10%;">
+                        <div><a id="video" style="cursor: pointer;" onclick="scrollToVideo()">Watch Intro Video</a></div>
+                        <div><a id="paper" href="https://arxiv.org/abs/****.*****">Read Research Paper</a></div>
+                        <div><a id="code" href="https://github.com/microsoft/TRELLIS.2">Code</a></div>
+                        <div><a id="demo" href="https://huggingface.co/spaces/microsoft/TRELLIS.2">Demo</a></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div style="display: flex; justify-content: center; align-items: center; height: 20vh;">
+            <div style="font-size: 18px; font-weight: 200; color: #ffffff9f; max-width: 900px;">
+                An open-source <span style="font-weight: 500; font-style: italic;">4B-parameter</span> image-to-3D model producing <span style="font-weight: 500; font-style: italic;">up to 1536³ PBR textured assets</span>, built on <span style="font-weight: 500; font-style: italic;">native 3D VAEs</span> with <span style="font-weight: 500; font-style: italic;">16× spatial compression</span>, delivering <span style="font-weight: 500; font-style: italic;">efficient, scalable, high-fidelity</span> asset generation.
+            </div>
+        </div>
+
+        <div class="pv-video-wrapper" id="videoWrapper" style="max-width: 1200px; margin-top: 32px; margin-bottom: 96px;">
+            <video class="pv-video-element" id="pvVideo" playsinline>
+                <source src="assets/trellis2.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+
+            <div class="pv-poster-overlay" style="background-image: url('assets/cover.webp');" id="playTrigger">
+                <div class="pv-play-btn"></div>
+            </div>
+        </div>
+
+        <div id="main">
+            <div class="x-section-title">Key Features</div>
+
+            <div class="feature-container">
+    
+                <!-- 1. Navigation Icons (Row of 4 Squares) -->
+                <div class="feature-tabs">
+                    <!-- Tab 1: Yellow -->
+                    <div class="feature-tab" onclick="showFeature(0, 'yellow')">
+                        <!-- Icon: Star/Quality -->
+                        <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                        <span>High Quality, Resolution, Efficiency</span>
+                    </div>
+
+                    <!-- Tab 2: Red -->
+                    <div class="feature-tab" onclick="showFeature(1, 'red')">
+                        <!-- Icon: Cube/Topology -->
+                        <svg viewBox="0 0 24 24"><path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44A.991.991 0 0 1 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44A.99.99 0 0 1 12 2c.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L6.04 7.5 12 10.85l5.96-3.35L12 4.15zM5 15.91l6 3.38v-6.71L5 9.21v6.7zm14 0v-6.7l-6 3.38v6.71l6-3.38z"/></svg>
+                        <span>Arbitrary<br>Topology</span>
+                    </div>
+
+                    <!-- Tab 3: Blue -->
+                    <div class="feature-tab" onclick="showFeature(2, 'blue')">
+                        <!-- Icon: Palette/Texture -->
+                        <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                        <span>Rich<br>Texture</span>
+                    </div>
+
+                    <!-- Tab 4: Purple -->
+                    <div class="feature-tab" onclick="showFeature(3, 'purple')">
+                        <!-- Icon: Bolt/Speed -->
+                        <svg viewBox="0 0 24 24"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"/></svg>
+                        <span>Minimalist<br>Asset Processing</span>
+                    </div>
+                </div>
+
+                <!-- 2. Content Display Area -->
+                <div class="feature-content-wrapper">
+                    
+                    <!-- Content 1: High Quality -->
+                    <div class="feature-panel">
+                        <div style="font-size: 24px; font-weight: 700; color: #facd5c; margin-bottom: 16px;">
+                            High Quality, Resolution & Efficiency
+                        </div>
+                        <p style="color: #d4d4d8; font-size: 15px; line-height: 1.6;">
+                            Our 4B-parameter model generates high-resolution fully textured assets with exceptional fidelity
+                            and efficiency with vanilla DiTs.
+                        </p>
+                        <div style="display: flex; gap: 16px; margin: 0px 16px;">
+                            <div style="background-color: #1f1f1f; border-radius: 8px; padding: 12px 16px; text-align: center; flex-grow: 1;">
+                                <div style="font-size: 24px; font-weight: 700; color: #facd5c; line-height: 1;">3s <span style="font-size: 11px;">(2s+1s)</span></div>
+                                <div style="font-size: 11px; text-transform: uppercase; color: #d3d3d3; margin-top: 4px; letter-spacing: 0.5px;">512<sup>3</sup> resolution</div>
+                            </div>
+                            <div style="background-color: #1f1f1f; border-radius: 8px; padding: 12px 16px; text-align: center; flex-grow: 1;">
+                                <div style="font-size: 24px; font-weight: 700; color: #facd5c; line-height: 1;">17s <span style="font-size: 11px;">(10s+7s)</span></div>
+                                <div style="font-size: 11px; text-transform: uppercase; color: #d3d3d3; margin-top: 4px; letter-spacing: 0.5px;">1024<sup>3</sup> resolution</div>
+                            </div>
+                            <div style="background-color: #1f1f1f; border-radius: 8px; padding: 12px 16px; text-align: center; flex-grow: 1;">
+                                <div style="font-size: 24px; font-weight: 700; color: #facd5c; line-height: 1;">60s <span style="font-size: 11px;">(35s+25s)</span></div>
+                                <div style="font-size: 11px; text-transform: uppercase; color: #d3d3d3; margin-top: 4px; letter-spacing: 0.5px;">1536<sup>3</sup> resolution</div>
+                            </div>
+                        </div>
+                        <div style="color: #7f7f7f; font-size: 12px; margin: 0px 16px; margin-top: 8px; font-weight: 500;">
+                            * Total generation time (shape + material).&nbsp;&nbsp;
+                            ** Tested with NVIDIA H100 GPU.
+                        </div>
+                        <p style="color: #d4d4d8; font-size: 15px; line-height: 1.6;">
+                            At the core is the native and compact structured latents, which push the frontiers
+                            of fidelity and compactness at the same time.
+                        </p>
+                        <div style="margin-top: 16px; border-radius: 8px; overflow: hidden; margin: 0 auto; max-width: 500px;">
+                            <img src="assets/feature/fidelity_comparison.png" alt="Fidelity Comparison" style="width: 100%; display: block; object-fit: cover;">
+                        </div> 
+                        <p style="color: #d4d4d8; font-size: 15px; font-weight: 500; line-height: 1.6; text-align: center; margin-top: 8px">
+                            Reconstruction accuracy v.s. Latent compactness
+                        </p>
+                    </div>
+
+                    <!-- Content 2: Topology -->
+                    <div class="feature-panel">
+                        <div style="font-size: 24px; font-weight: 700; color: #d17969; margin-bottom: 16px;">
+                            Arbitrary Topology Handling
+                        </div>
+                        <p style="color: #d4d4d8; font-size: 15px; line-height: 1.6; flex-grow: 1;">
+                            Our method robustly handles complex structures, including 
+                            open surfaces, non-manifold geometry, and enclosed interior structures, breaking the constraints of iso-surface fields.
+                        </p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-left: 16px; margin-bottom: 16px;">
+                            <div style="background-color: #1f1f1f; border: 1px solid #d17969; color: #d17969; border-radius: 8px; padding: 8px 16px; font-weight: 700;">✔ Open Surfaces</div>
+                            <div style="background-color: #1f1f1f; border: 1px solid #d17969; color: #d17969; border-radius: 8px; padding: 8px 16px; font-weight: 700;">✔ Non-manifold</div>
+                            <div style="background-color: #1f1f1f; border: 1px solid #d17969; color: #d17969; border-radius: 8px; padding: 8px 16px; font-weight: 700;">✔ Internal Structures</div>
+                        </div>
+                        <div style="height: 400px; background-color: #1f1f1f; border-radius: 8px; margin: 0 16px;">
+                            <model-viewer
+                                style="width: 100%; height: 100%;"
+                                src="assets/feature/topology.glb"
+                                camera-controls
+                                camera-orbit="-30deg 75deg 1.5m"
+                                tone-mapping="natural"
+                                shadow-intensity="1"
+                                environment-image="assets/env_maps/gradient.jpg"
+                                exposure="2"
+                            ></model-viewer>
+                        </div>
+                        <div style="color: #7f7f7f; font-size: 12px; margin-top: 8px; margin-left: 16px; font-weight: 500;">
+                            * Mesh is cut to showcase internal structure.
+                        </div>
+                    </div>
+
+                    <!-- Content 3: Texture -->
+                    <div class="feature-panel">
+                        <div style="font-size: 24px; font-weight: 700; color: #60a5fa; margin-bottom: 16px;">
+                            Rich Texture Modeling
+                        </div>
+                        <p style="color: #d4d4d8; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
+                            Our method can model arbitrary surface attributes such as
+                            Base Color, Roughness, Metallic, and Opacity (i.e., Transparency or Alpha channel), enabling Physically Based Rendering (PBR) and photorealistic relighting.
+                        </p>
+                        <div style="border-radius: 8px; overflow: hidden;">
+                            <img src="assets/feature/relighting.webp" alt="Relighting" style="width: 100%; display: block; object-fit: cover;">
+                        </div>
+                    </div>
+
+                    <!-- Content 4: Minimalist -->
+                    <div class="feature-panel">
+                        <div style="font-size: 24px; font-weight: 700; color: #b7a5ff; margin-bottom: 16px;">
+                            Minimalist 3D Asset Pre- and Post-processing
+                        </div>
+                        <p style="color: #d4d4d8; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
+                            Data processing for training and inference are simple, enabling instant conversions that are fully
+                            rendering-free and optimization-free.
+                        </p>
+                        <div style="display: flex; flex-direction: column; gap: 16px; margin: 0px 16px;">
+                        <div style="background-color: #1f1f1f; border-radius: 8px; padding: 12px 16px; text-align: center; flex-grow: 1;">
+                            <div style="font-size: 24px; font-weight: 700; color: #b7a5ff; line-height: 1;">&lt; 10s <span style="font-size: 14px;">on single CPU</span></div>
+                            <div style="font-size: 11px; text-transform: uppercase; color: #d3d3d3; margin-top: 4px; letter-spacing: 0.5px;">Textured Mesh → O-Voxel</div>
+                        </div>
+                        <div style="background-color: #1f1f1f; border-radius: 8px; padding: 12px 16px; text-align: center; flex-grow: 1;">
+                            <div style="font-size: 24px; font-weight: 700; color: #b7a5ff; line-height: 1;">&lt; 100ms <span style="font-size: 14px;">with CUDA acceleration</span></div>
+                            <div style="font-size: 11px; text-transform: uppercase; color: #d3d3d3; margin-top: 4px; letter-spacing: 0.5px;">O-Voxel → Textured Mesh</div>
+                        </div>
+                    </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="x-section-title">Image to 3D Asset Generation</div>
+            <div id="results-gen"></div>
+
+            <div class="x-section-title">3D Asset Reconstruction</div>
+            <div id="results-recon"></div>
+
+
+            <div class="x-section-title">Tech Innovations</div>
+
+            <!-- 1. Overview Section -->
+            <div style="margin-bottom: 40px; margin: 0 16px;">
+                <img src="assets/method/overview.jpg" alt="Overview" 
+                    style="width: 100%;">
+                <p style="font-size: 18px; margin-top: 24px; margin-left: auto; margin-right: auto;">
+                    <span>T<span style="font-size: 16px;">RELLIS</span>.2</span>'s pipeline begins with an
+                    Instant Bidirectional Conversion
+                    that transforms meshes into our new representation termed
+                    <span>O-Voxel</span>. 
+                    A
+                    <span>Sparse Compression VAE</span>
+                    then encodes these voxels into a 
+                    compact Structured Latent space.
+                </p>
+            </div>
+
+            <!-- 2. O-Voxel Section (Card Style) -->
+            <div style="background: rgba(255,255,255,0.07); border-radius: 16px; padding: 24px; display: flex; flex-wrap: wrap-reverse; align-items: center; gap: 48px; margin: 0 16px; margin-top: 32px;">
+                
+                <!-- Left: Image -->
+                <div style="flex: 1; min-width: 250px; display: flex; justify-content: center; align-items: center;">
+                    <img src="assets/method/ovoxel.png" alt="O-Voxel" style="max-height: 250px; width: auto; max-width: 100%;">
+                </div>
+
+                <!-- Right: Text -->
+                <div style="flex: 10; min-width: 300px; font-size: 15px;">
+                    <div style="margin-top: 0; margin-bottom: 20px; font-size: 24px; color: #ffffff;">
+                        O-Voxel: <span style="color: #a476be; font-style: italic;">Omni-Voxel Representation</span>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        O-Voxel is a novel "field-free" sparse voxel structure designed to encode both precise geometry and complex appearance simultaneously.
+                    </div>
+                    
+                    <!-- Styled List Items -->
+                    <!-- Geometry Block -->
+                    <div style="display: flex; gap: 16px; align-items: flex-start;">
+                        <div style="background-color: rgba(34, 197, 94, 0.3); color: #4ade80; font-weight: 700; padding: 6px 12px; border-radius: 8px; font-size: 12px; letter-spacing: 1px;">GEO</div>
+                        <div>
+                            <span style="color: #fff; font-weight: 500; display: block; margin-bottom: 4px;">Geometry (<i>f<sup>shape</sup></i>)</span> 
+                            <span style="font-size: 15px;">Utilizing a Flexible Dual Grids representation to handle arbitrary topologies while preserving sharp edges.</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Appearance Block -->
+                    <div style="display: flex; gap: 16px; align-items: flex-start;">
+                        <div style="background-color: rgba(59, 130, 246, 0.3); color: #60a5fa; font-weight: 700; padding: 6px 12px; border-radius: 8px; font-size: 12px; letter-spacing: 1px;">MAT</div>
+                        <div>
+                            <span style="color: #fff; font-weight: 500; display: block; margin-bottom: 4px;">Appearance (<i>f<sup>mat</sup></i>)</span> 
+                            <span style="font-size: 15px;">Supports full PBR attributes (Base Color, Metallic, Roughness, Alpha) to accurately model rich surface materials.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. VAE Section (Card Style) -->
+            <div style="background: rgba(255,255,255,0.07); border-radius: 16px; padding: 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 48px; margin: 0 16px; margin-top: 32px;">
+                
+                <!-- Left: Text -->
+                <div style="flex: 10; min-width: 300px; font-size: 15px;">
+                    <div style="margin-top: 0; margin-bottom: 20px; font-size: 24px; color: #ffffff;">
+                        SC-VAE: <span style="color: #eec88e; font-style: italic;">Sparse Compression VAE</span>
+                    </div>
+                    
+                    <div>
+                        We introduce a Sparse Compression 3D VAE, employing a Sparse Residual Autoencoding scheme to directly compress voxel data.
+                    </div>
+
+                    <!-- Stat Blocks Effect -->
+                    <div style="display: flex; gap: 16px; margin: 20px 0;">
+                        <div style="background-color: #1f1f1f; border-radius: 8px; padding: 12px 20px; text-align: center; flex-grow: 1;">
+                            <div style="font-size: 24px; font-weight: 700; color: #eec88e; line-height: 1;">16&times;</div>
+                            <div style="font-size: 11px; text-transform: uppercase; color: #d3d3d3; margin-top: 4px; letter-spacing: 0.5px;">Downsampling</div>
+                        </div>
+                        <div style="background-color: #1f1f1f; border-radius: 8px; padding: 12px 20px; text-align: center; flex-grow: 1;">
+                            <div style="font-size: 24px; font-weight: 700; color: #eec88e; line-height: 1;">~9.6K</div>
+                            <div style="font-size: 11px; text-transform: uppercase; color: #d3d3d3; margin-top: 4px; letter-spacing: 0.5px;">Latent Tokens for 1024<sup>3</sup></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        It encodes a fully textured 3D asset into a highly compact representation with negligible perceptual degradation, enabling efficient large-scale generative modeling.
+                    </div>
+                </div>
+
+                <!-- Right: Image -->
+                <div style="flex: 1; min-width: 300px; display: flex; justify-content: center; align-items: center;">
+                    <img src="assets/method/scvae.png" alt="Sparse Compression VAE" style="max-height: 300px; width: auto; max-width: 100%;">
+                </div>
+            </div>
+
+            <div class="x-small-header" style="margin-top: 100px;">Authors</div>
+            <div>
+                
+                <!-- Jianfeng Xiang (1, 2) -->
+                <div class="author-info">
+                    <div style="flex: 1 0 0; text-align: right;">
+                        <a class="author-link" href="https://jeffreyxiang.github.io">Jianfeng Xiang</a>
+                    </div>
+                    <div style="flex: 1 0 0; text-align: left; color: rgba(255, 255, 255, 0.7);">
+                        <span class="affiliation-link" href="https://www.tsinghua.edu.cn/en/">Tsinghua University</span>,
+                        <span class="affiliation-link" href="https://www.microsoft.com/en-us/research/">Microsoft Research</span>
+                    </div>
+                </div>
+
+                <!-- Xiaoxue Chen (1) -->
+                <div class="author-info">
+                    <div style="flex: 1 0 0; text-align: right;">
+                        <a class="author-link" href="https://cxx226.github.io">Xiaoxue Chen</a>
+                    </div>
+                    <div style="flex: 1 0 0; text-align: left; color: rgba(255, 255, 255, 0.7);">
+                        <span class="affiliation-link" href="https://www.tsinghua.edu.cn/en/">Tsinghua University</span>
+                    </div>
+                </div>
+
+                <!-- Sicheng Xu (2) -->
+                <div class="author-info">
+                    <div style="flex: 1 0 0; text-align: right;">
+                        <a class="author-link" href="https://github.com/sicxu">Sicheng Xu</a>
+                    </div>
+                    <div style="flex: 1 0 0; text-align: left; color: rgba(255, 255, 255, 0.7);">
+                        <span class="affiliation-link" href="https://www.microsoft.com/en-us/research/">Microsoft Research</span>
+                    </div>
+                </div>
+
+                <!-- Ruicheng Wang (3, 2) -->
+                <div class="author-info">
+                    <div style="flex: 1 0 0; text-align: right;">
+                        <a class="author-link" href="https://wangrc.site">Ruicheng Wang</a>
+                    </div>
+                    <div style="flex: 1 0 0; text-align: left; color: rgba(255, 255, 255, 0.7);">
+                        <span class="affiliation-link" href="https://en.ustc.edu.cn/">USTC</span>,
+                        <span class="affiliation-link" href="https://www.microsoft.com/en-us/research/">Microsoft Research</span>
+                    </div>
+                </div>
+
+                <!-- Zelong Lv (3, 2) -->
+                <div class="author-info">
+                    <div style="flex: 1 0 0; text-align: right;">
+                        <a class="author-link" href="https://github.com/MaxtirError">Zelong Lv</a>
+                    </div>
+                    <div style="flex: 1 0 0; text-align: left; color: rgba(255, 255, 255, 0.7);">
+                        <span class="affiliation-link" href="https://en.ustc.edu.cn/">USTC</span>,
+                        <span class="affiliation-link" href="https://www.microsoft.com/en-us/research/">Microsoft Research</span>
+                    </div>
+                </div>
+
+                <!-- Yu Deng (2) -->
+                <div class="author-info">
+                    <div style="flex: 1 0 0; text-align: right;">
+                        <a class="author-link" href="https://yudeng.github.io">Yu Deng</a>
+                    </div>
+                    <div style="flex: 1 0 0; text-align: left; color: rgba(255, 255, 255, 0.7);">
+                        <span class="affiliation-link" href="https://www.microsoft.com/en-us/research/">Microsoft Research</span>
+                    </div>
+                </div>
+
+                <!-- Hongyuan Zhu (4) -->
+                <div class="author-info">
+                    <div style="flex: 1 0 0; text-align: right;">
+                        <a class="author-link" >Hongyuan Zhu</a>
+                    </div>
+                    <div style="flex: 1 0 0; text-align: left; color: rgba(255, 255, 255, 0.7);">
+                        <span class="affiliation-link" href="https://microsoft.ai/">Microsoft AI</span>
+                    </div>
+                </div>
+
+                <!-- Yue Dong (2) -->
+                <div class="author-info">
+                    <div style="flex: 1 0 0; text-align: right;">
+                        <a class="author-link" href="https://yuedong.shading.me">Yue Dong</a>
+                    </div>
+                    <div style="flex: 1 0 0; text-align: left; color: rgba(255, 255, 255, 0.7);">
+                        <span class="affiliation-link" href="https://www.microsoft.com/en-us/research/">Microsoft Research</span>
+                    </div>
+                </div>
+
+                <!-- Hao Zhao (1) -->
+                <div class="author-info">
+                    <div style="flex: 1 0 0; text-align: right;">
+                        <a class="author-link" href="https://sites.google.com/view/fromandto">Hao Zhao</a>
+                    </div>
+                    <div style="flex: 1 0 0; text-align: left; color: rgba(255, 255, 255, 0.7);">
+                        <span class="affiliation-link" href="https://www.tsinghua.edu.cn/en/">Tsinghua University</span>
+                    </div>
+                </div>
+
+                <!-- Nicholas Jing Yuan (4) -->
+                <div class="author-info">
+                    <div style="flex: 1 0 0; text-align: right;">
+                        <a class="author-link" href="https://www.microsoft.com/en-us/research/people/nicholasyuan">Nicholas Jing Yuan</a>
+                    </div>
+                    <div style="flex: 1 0 0; text-align: left; color: rgba(255, 255, 255, 0.7);">
+                        <span class="affiliation-link" href="https://microsoft.ai/">Microsoft AI</span>
+                    </div>
+                </div>
+
+                <!-- Jiaolong Yang (2) -->
+                <div class="author-info">
+                    <div style="flex: 1 0 0; text-align: right;">
+                        <a class="author-link" href="https://jlyang.org">Jiaolong Yang</a>
+                    </div>
+                    <div style="flex: 1 0 0; text-align: left; color: rgba(255, 255, 255, 0.7);">
+                        <span class="affiliation-link" href="https://www.microsoft.com/en-us/research/">Microsoft Research</span>
+                    </div>
+                </div>
+            </div>
+            <div class="x-small-header">Citation</div>
+            <div class="bibtex-entry">
+                <div class="line">
+                    <span class="value">@article{xiang2025trellis2,</span>
+                </div>
+                <div class="line">
+                    <span class="key">    title={</span>
+                    <span class="value">Native and Compact Structured Latents for 3D Generation},</span>
+                </div>
+                <div class="line">
+                    <span class="key">    author={</span>
+                    <span class="value">Xiang, Jianfeng and Chen, Xiaoxue and Xu, Sicheng and Wang, Ruicheng and Lv, Zelong and Deng, Yu and Zhu, Hongyuan and Dong, Yue and Zhao, Hao and Yuan, Nicholas Jing and Yang, Jiaolong},</span>
+                </div>
+                <div class="line">
+                    <span class="key">    journal={</span>
+                    <span class="value">Tech report},</span>
+                </div>
+                <div class="line">
+                    <span class="key">    year={</span>
+                    <span class="value">2025}</span>
+                </div>
+                <div class="line">}</div>
+            </div>
+
+            <div class="x-small-header">Responsible AI Considerations</div>
+            <p class="x-note">
+                TRELLIS.2 is purely a research project. Responsible AI considerations were factored into all stages. The datasets used in this paper are public and have been reviewed to ensure there is no personally identifiable information or harmful content. However, as these datasets are sourced from the Internet, potential bias may still be present.
+            </p>
+            <div class="x-small-header">Material Disclaimer</div>
+            <p class="x-note">
+                The materials made available on this page are provided solely for academic and research purposes in connection with the exploration of 3D generation technologies, as described in our tech report. These materials are not intended for commercial exploitation or use.
+    If you believe that any content on this page infringes upon your intellectual property rights, including but not limited to copyright, please notify us by submitting a takedown request via email to jiaoyan (at) microsoft.com.
+            </p>
+
+            <div style="height: 100px;"> </div>
+
+        </div>
+
+        
+        <div id="bottombar">
+            <div class="row">
+                <div><span>T<span style="font-size: 10px;">RELLIS</span>.2:</span> Native and Compact Structured Latents for 3D Generation</div>
+                <div style="display: flex; flex-direction: row; gap: 8px; flex-wrap: wrap;">
+                    <a href="https://github.com/microsoft/TRELLIS.2/issues">Contact Us on GitHub</a>
+                    <span style="width: 1px; background-color: rgba(255, 255, 255, 0.7);"></span>
+                    <a href="https://go.microsoft.com/fwlink/?LinkId=521839">Privacy & Cookies</a>
+                    <span style="width: 1px; background-color: rgba(255, 255, 255, 0.7);"></span>
+                    <a href="https://go.microsoft.com/fwlink/?linkid=2259814">Consumer Health Privacy</a>
+                    <span style="width: 1px; background-color: rgba(255, 255, 255, 0.7);"></span>
+                    <a href="https://go.microsoft.com/fwlink/?LinkID=246338">Terms of Use</a>
+                    <span style="width: 1px; background-color: rgba(255, 255, 255, 0.7);"></span>
+                    <a href="https://go.microsoft.com/fwlink/?linkid=2196228">Trademarks</a>
+                    <span style="width: 1px; background-color: rgba(255, 255, 255, 0.7);"></span>
+                    <span>© 2025 Microsoft</span>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Scroll Down Indicator -->
+        <div id="scroll-indicator" class="scroll-indicator">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 13l5 5 5-5"/>
+            </svg>
+        </div>
+
+    </body>
+</html>
