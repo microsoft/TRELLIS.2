@@ -516,7 +516,7 @@ def extract_glb(
 
 with gr.Blocks(delete_cache=(600, 600)) as demo:
     gr.Markdown("""
-    ## Image to 3D Asset with [TRELLIS.2](https://microsoft.github.io/trellis.2)
+    ## Image to 3D Asset with [TRELLIS.2](https://microsoft.github.io/TRELLIS.2)
     * Upload an image (preferably with an alpha-masked foreground object) and click Generate to create a 3D asset.
     * Click Extract GLB to export and download the generated GLB file if you're satisfied with the result. Otherwise, try another time.
     """)
