@@ -75,7 +75,11 @@ Data processing is streamlined for instant conversions that are fully **renderin
     **Before running the following command there are somethings to note:**
     - By adding `--new-env`, a new conda environment named `trellis2` will be created. If you want to use an existing conda environment, please remove this flag.
     - By default the `trellis2` environment will use pytorch 2.6.0 with CUDA 12.4. If you want to use a different version of CUDA, you can remove the `--new-env` flag and manually install the required dependencies. Refer to [PyTorch](https://pytorch.org/get-started/previous-versions/) for the installation command.
-    - If you have multiple CUDA Toolkit versions installed, `CUDA_HOME` should be set to the correct version before running the command. For example, if you have CUDA Toolkit 12.4 and 13.0 installed, you can run `export CUDA_HOME=/usr/local/cuda-12.4` before running the command.
+    - If you have multiple CUDA Toolkit versions installed, `CUDA_HOME` should be set to the correct version before running the command. For example, if you have CUDA Toolkit 12.4 and 13.0 installed, you can run `export CUDA_HOME=/usr/local/cuda-12.4` before running the command. The script will attempt to auto-detect CUDA if `CUDA_HOME` is not set.
+    - **IMPORTANT:** The script automatically configures CUDA library paths to fix common linker issues with `libcuda.so`. If you encounter linker errors, ensure that:
+      - `libcuda.so` exists in `/usr/lib/x86_64-linux-gnu/` or your system's library path
+      - Your CUDA toolkit is properly installed with development libraries
+    - The script automatically converts git submodule URLs from SSH to HTTPS to avoid authentication issues during installation.
     - By default, the code uses the `flash-attn` backend for attention. For GPUs do not support `flash-attn` (e.g., NVIDIA V100), you can install `xformers` manually and set the `ATTN_BACKEND` environment variable to `xformers` before running the code. See the [Minimal Example](#minimal-example) for more details.
     - The installation may take a while due to the large number of dependencies. Please be patient. If you encounter any issues, you can try to install the dependencies one by one, specifying one flag at a time.
     - If you encounter any issues during the installation, feel free to open an issue or contact us.
