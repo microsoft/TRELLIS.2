@@ -1,0 +1,7 @@
+# TRELLIS.2 Modal Client Dependencies
+# Install with: pip install -r requirements.txt
+
+gradio>=4.0
+requests
+numpy
+lz4
