@@ -642,4 +642,4 @@ if __name__ == "__main__":
         )),
     }
     
-    demo.launch(css=css, head=head)
+    demo.launch(server_name="0.0.0.0", server_port=7860, css=css, head=head)
