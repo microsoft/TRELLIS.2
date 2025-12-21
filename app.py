@@ -518,7 +518,7 @@ with gr.Blocks(delete_cache=(600, 600)) as demo:
     gr.Markdown("""
     ## Image to 3D Asset with [TRELLIS.2](https://microsoft.github.io/TRELLIS.2)
     * Upload an image (preferably with an alpha-masked foreground object) and click Generate to create a 3D asset.
-    * Click Extract GLB to export and download the generated GLB file if you're satisfied with the result. Otherwise, try another time.
+    * The 3D model will be automatically generated and displayed after the preview. You can also manually re-extract with different settings using the Extract GLB button.
     """)
     
     with gr.Row():
@@ -603,8 +603,15 @@ with gr.Blocks(delete_cache=(600, 600)) as demo:
             tex_slat_guidance_strength, tex_slat_guidance_rescale, tex_slat_sampling_steps, tex_slat_rescale_t,
         ],
         outputs=[output_buf, preview_output],
+    ).then(
+        lambda: gr.Walkthrough(selected=1), outputs=walkthrough
+    ).then(
+        extract_glb,
+        inputs=[output_buf, decimation_target, texture_size],
+        outputs=[glb_output, download_btn],
     )
     
+    # Keep manual extract button for re-extraction if needed
     extract_btn.click(
         lambda: gr.Walkthrough(selected=1), outputs=walkthrough
     ).then(
