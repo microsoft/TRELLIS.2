@@ -86,7 +86,20 @@ fi
 
 if [ "$FLASHATTN" = true ] ; then
     if [ "$PLATFORM" = "cuda" ] ; then
-        pip install flash-attn==2.7.3
+        # flash-attn's setup.py imports torch during build requirements phase
+        # pip's isolated build environment doesn't have torch, so we build from source
+        echo "[FLASHATTN] Building from source (torch required during build)..."
+        mkdir -p /tmp/extensions
+        if [ ! -d "/tmp/extensions/flash-attention" ]; then
+            git clone --recursive https://github.com/Dao-AILab/flash-attention.git /tmp/extensions/flash-attention
+        fi
+        cd /tmp/extensions/flash-attention
+        git fetch --tags
+        git checkout v2.7.3 2>/dev/null || git checkout tags/v2.7.3 2>/dev/null || git checkout v2.7.3
+        git submodule update --init --recursive
+        # Build with pip install to ensure torch is available in the environment
+        MAX_JOBS=4 pip install . --no-build-isolation
+        cd $WORKDIR
     elif [ "$PLATFORM" = "hip" ] ; then
         echo "[FLASHATTN] Prebuilt binaries not found. Building from source..."
         mkdir -p /tmp/extensions
@@ -113,7 +126,40 @@ fi
 if [ "$NVDIFFREC" = true ] ; then
     if [ "$PLATFORM" = "cuda" ] ; then
         mkdir -p /tmp/extensions
-        git clone -b renderutils https://github.com/JeffreyXiang/nvdiffrec.git /tmp/extensions/nvdiffrec
+        if [ ! -d "/tmp/extensions/nvdiffrec" ]; then
+            git clone -b renderutils https://github.com/JeffreyXiang/nvdiffrec.git /tmp/extensions/nvdiffrec
+        fi
+        
+        # Find libcuda.so (NVIDIA driver library)
+        LIBCUDA_PATH=$(find /usr -name "libcuda.so*" 2>/dev/null | head -1)
+        if [ -z "$LIBCUDA_PATH" ]; then
+            # Try wider search
+            LIBCUDA_PATH=$(find / -name "libcuda.so*" 2>/dev/null | grep -v "/proc\|/sys\|/dev" | head -1)
+        fi
+        
+        if [ -n "$LIBCUDA_PATH" ]; then
+            LIBCUDA_DIR=$(dirname "$LIBCUDA_PATH")
+            echo "[NVDIFFREC] Found libcuda.so at: $LIBCUDA_PATH"
+            
+            # Set library paths for the linker
+            export LIBRARY_PATH=${LIBRARY_PATH}:${LIBCUDA_DIR}
+            export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${LIBCUDA_DIR}
+            
+            # Also add common CUDA library locations
+            if [ -n "$CUDA_HOME" ]; then
+                export LIBRARY_PATH=${LIBRARY_PATH}:${CUDA_HOME}/lib64
+            else
+                export LIBRARY_PATH=${LIBRARY_PATH}:/usr/local/cuda-12.4/lib64:/usr/local/cuda/lib64
+            fi
+            
+            # Set LDFLAGS to help the linker find libcuda
+            export LDFLAGS="-L${LIBCUDA_DIR} ${LDFLAGS}"
+        else
+            echo "[NVDIFFREC] Warning: libcuda.so not found. Trying default locations..."
+            export LIBRARY_PATH=${LIBRARY_PATH}:/usr/lib/x86_64-linux-gnu:/usr/lib64
+            export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/x86_64-linux-gnu:/usr/lib64
+        fi
+        
         pip install /tmp/extensions/nvdiffrec --no-build-isolation
     else
         echo "[NVDIFFREC] Unsupported platform: $PLATFORM"
