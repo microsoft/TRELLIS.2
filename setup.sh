@@ -83,7 +83,11 @@ if [ "$BASIC" = true ] ; then
     # Uninstall regular pillow before installing pillow-simd to avoid conflicts
     pip uninstall -y pillow 2>/dev/null || true
     pip install pillow-simd
+    # Ensure huggingface-hub is compatible with transformers (requires <1.0)
+    pip install "huggingface-hub<1.0,>=0.34.0" "huggingface_hub[cli]"
     pip install kornia timm
+    # FastAPI dependencies for API server
+    pip install fastapi uvicorn[standard] python-multipart
 fi
 
 if [ "$FLASHATTN" = true ] ; then
