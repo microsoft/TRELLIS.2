@@ -28,6 +28,17 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         rembg_model (Callable): The model for removing background.
         low_vram (bool): Whether to use low-VRAM mode.
     """
+    model_names_to_load = [
+        'sparse_structure_flow_model',
+        'sparse_structure_decoder',
+        'shape_slat_flow_model_512',
+        'shape_slat_flow_model_1024',
+        'shape_slat_decoder',
+        'tex_slat_flow_model_512',
+        'tex_slat_flow_model_1024',
+        'tex_slat_decoder',
+    ]
+
     def __init__(
         self,
         models: dict[str, nn.Module] = None,
@@ -67,45 +78,43 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         }
         self._device = 'cpu'
 
-    @staticmethod
-    def from_pretrained(path: str) -> "Trellis2ImageTo3DPipeline":
+    @classmethod
+    def from_pretrained(cls, path: str, config_file: str = "pipeline.json") -> "Trellis2ImageTo3DPipeline":
         """
         Load a pretrained model.
 
         Args:
             path (str): The path to the model. Can be either local path or a Hugging Face repository.
         """
-        pipeline = super(Trellis2ImageTo3DPipeline, Trellis2ImageTo3DPipeline).from_pretrained(path)
-        new_pipeline = Trellis2ImageTo3DPipeline()
-        new_pipeline.__dict__ = pipeline.__dict__
+        pipeline = super().from_pretrained(path, config_file)
         args = pipeline._pretrained_args
 
-        new_pipeline.sparse_structure_sampler = getattr(samplers, args['sparse_structure_sampler']['name'])(**args['sparse_structure_sampler']['args'])
-        new_pipeline.sparse_structure_sampler_params = args['sparse_structure_sampler']['params']
+        pipeline.sparse_structure_sampler = getattr(samplers, args['sparse_structure_sampler']['name'])(**args['sparse_structure_sampler']['args'])
+        pipeline.sparse_structure_sampler_params = args['sparse_structure_sampler']['params']
 
-        new_pipeline.shape_slat_sampler = getattr(samplers, args['shape_slat_sampler']['name'])(**args['shape_slat_sampler']['args'])
-        new_pipeline.shape_slat_sampler_params = args['shape_slat_sampler']['params']
+        pipeline.shape_slat_sampler = getattr(samplers, args['shape_slat_sampler']['name'])(**args['shape_slat_sampler']['args'])
+        pipeline.shape_slat_sampler_params = args['shape_slat_sampler']['params']
 
-        new_pipeline.tex_slat_sampler = getattr(samplers, args['tex_slat_sampler']['name'])(**args['tex_slat_sampler']['args'])
-        new_pipeline.tex_slat_sampler_params = args['tex_slat_sampler']['params']
+        pipeline.tex_slat_sampler = getattr(samplers, args['tex_slat_sampler']['name'])(**args['tex_slat_sampler']['args'])
+        pipeline.tex_slat_sampler_params = args['tex_slat_sampler']['params']
 
-        new_pipeline.shape_slat_normalization = args['shape_slat_normalization']
-        new_pipeline.tex_slat_normalization = args['tex_slat_normalization']
+        pipeline.shape_slat_normalization = args['shape_slat_normalization']
+        pipeline.tex_slat_normalization = args['tex_slat_normalization']
 
-        new_pipeline.image_cond_model = getattr(image_feature_extractor, args['image_cond_model']['name'])(**args['image_cond_model']['args'])
-        new_pipeline.rembg_model = getattr(rembg, args['rembg_model']['name'])(**args['rembg_model']['args'])
+        pipeline.image_cond_model = getattr(image_feature_extractor, args['image_cond_model']['name'])(**args['image_cond_model']['args'])
+        pipeline.rembg_model = getattr(rembg, args['rembg_model']['name'])(**args['rembg_model']['args'])
         
-        new_pipeline.low_vram = args.get('low_vram', True)
-        new_pipeline.default_pipeline_type = args.get('default_pipeline_type', '1024_cascade')
-        new_pipeline.pbr_attr_layout = {
+        pipeline.low_vram = args.get('low_vram', True)
+        pipeline.default_pipeline_type = args.get('default_pipeline_type', '1024_cascade')
+        pipeline.pbr_attr_layout = {
             'base_color': slice(0, 3),
             'metallic': slice(3, 4),
             'roughness': slice(4, 5),
             'alpha': slice(5, 6),
         }
-        new_pipeline._device = 'cpu'
+        pipeline._device = 'cpu'
 
-        return new_pipeline
+        return pipeline
 
     def to(self, device: torch.device) -> None:
         self._device = device
@@ -364,7 +373,6 @@ class Trellis2ImageTo3DPipeline(Pipeline):
 
         Args:
             slat (SparseTensor): The structured latent.
-            formats (List[str]): The formats to decode the structured latent to.
 
         Returns:
             List[Mesh]: The decoded meshes.
@@ -433,10 +441,9 @@ class Trellis2ImageTo3DPipeline(Pipeline):
 
         Args:
             slat (SparseTensor): The structured latent.
-            formats (List[str]): The formats to decode the structured latent to.
 
         Returns:
-            List[SparseTensor]: The decoded texture voxels
+            SparseTensor: The decoded texture voxels
         """
         if self.low_vram:
             self.models['tex_slat_decoder'].to(self.device)

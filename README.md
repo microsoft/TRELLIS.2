@@ -49,7 +49,7 @@ Data processing is streamlined for instant conversions that are fully **renderin
 - [x] Release image-to-3D inference code
 - [x] Release pretrained checkpoints (4B)
 - [x] Hugging Face Spaces demo
-- [ ] Release shape-conditioned texture generation inference code (Current schdule: before 12/24/2025)
+- [x] Release shape-conditioned texture generation inference code
 - [ ] Release training code (Current schdule: before 12/31/2025)
 
 
@@ -184,7 +184,7 @@ Then, you can access the demo at the address shown in the terminal.
 
 ### 2. PBR Texture Generation
 
-Will be released soon. Please stay tuned!
+Please refer to the [example_texturing.py](example_texturing.py) for an example of how to generate PBR textures for a given 3D shape. Also, you can use the [app_texturing.py](app_texturing.py) to run a web demo for PBR texture generation.
 
 ## 🧩 Related Packages
 
