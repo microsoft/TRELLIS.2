@@ -79,7 +79,7 @@ fi
 if [ "$BASIC" = true ] ; then
     pip install imageio imageio-ffmpeg tqdm easydict opencv-python-headless ninja trimesh transformers gradio==6.0.1 tensorboard pandas lpips zstandard
     pip install git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
-    sudo apt install -y libjpeg-dev
+    sudo apt install -y libjpeg-dev libwebp-dev
     pip install pillow-simd
     pip install kornia timm
 fi
@@ -102,9 +102,9 @@ fi
 
 if [ "$NVDIFFRAST" = true ] ; then
     if [ "$PLATFORM" = "cuda" ] ; then
-        mkdir -p /tmp/extensions
-        git clone -b v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/extensions/nvdiffrast
-        pip install /tmp/extensions/nvdiffrast --no-build-isolation
+        mkdir -p ./tmp/extensions
+        git clone -b v0.4.0 https://github.com/NVlabs/nvdiffrast.git ./tmp/extensions/nvdiffrast
+        pip install ./tmp/extensions/nvdiffrast --no-build-isolation
     else
         echo "[NVDIFFRAST] Unsupported platform: $PLATFORM"
     fi
@@ -112,28 +112,28 @@ fi
 
 if [ "$NVDIFFREC" = true ] ; then
     if [ "$PLATFORM" = "cuda" ] ; then
-        mkdir -p /tmp/extensions
-        git clone -b renderutils https://github.com/JeffreyXiang/nvdiffrec.git /tmp/extensions/nvdiffrec
-        pip install /tmp/extensions/nvdiffrec --no-build-isolation
+        mkdir -p ./tmp/extensions
+        git clone -b renderutils https://github.com/JeffreyXiang/nvdiffrec.git ./tmp/extensions/nvdiffrec
+        pip install ./tmp/extensions/nvdiffrec --no-build-isolation
     else
         echo "[NVDIFFREC] Unsupported platform: $PLATFORM"
     fi
 fi
 
 if [ "$CUMESH" = true ] ; then
-    mkdir -p /tmp/extensions
-    git clone https://github.com/JeffreyXiang/CuMesh.git /tmp/extensions/CuMesh --recursive
-    pip install /tmp/extensions/CuMesh --no-build-isolation
+    mkdir -p ./tmp/extensions
+    # git clone https://github.com/JeffreyXiang/CuMesh.git ./tmp/extensions/CuMesh --recursive
+    pip install ./tmp/extensions/CuMesh --no-build-isolation
 fi
 
 if [ "$FLEXGEMM" = true ] ; then
-    mkdir -p /tmp/extensions
-    git clone https://github.com/JeffreyXiang/FlexGEMM.git /tmp/extensions/FlexGEMM --recursive
-    pip install /tmp/extensions/FlexGEMM --no-build-isolation
+    mkdir -p ./tmp/extensions
+    git clone https://github.com/JeffreyXiang/FlexGEMM.git ./tmp/extensions/FlexGEMM --recursive
+    pip install ./tmp/extensions/FlexGEMM --no-build-isolation
 fi
 
 if [ "$OVOXEL" = true ] ; then
-    mkdir -p /tmp/extensions
-    cp -r o-voxel /tmp/extensions/o-voxel
-    pip install /tmp/extensions/o-voxel --no-build-isolation
+    mkdir -p ./tmp/extensions
+    cp -r o-voxel ./tmp/extensions/o-voxel
+    pip install ./tmp/extensions/o-voxel --no-build-isolation --no-deps
 fi
