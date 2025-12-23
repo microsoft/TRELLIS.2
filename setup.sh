@@ -66,6 +66,26 @@ else
     exit 1
 fi
 
+# Set CUDA_HOME if not already set (for CUDA platform)
+if [ "$PLATFORM" = "cuda" ] ; then
+    if [ -z "$CUDA_HOME" ]; then
+        # Try to find CUDA installation
+        if [ -d "/usr/local/cuda-12.4" ]; then
+            export CUDA_HOME=/usr/local/cuda-12.4
+            echo "[INFO] CUDA_HOME not set, using: $CUDA_HOME"
+        elif [ -d "/usr/local/cuda" ]; then
+            export CUDA_HOME=/usr/local/cuda
+            echo "[INFO] CUDA_HOME not set, using: $CUDA_HOME"
+        else
+            echo "[WARNING] CUDA_HOME not set and could not auto-detect CUDA installation."
+            echo "[WARNING] If compilation fails, please set CUDA_HOME manually before running this script."
+            echo "[WARNING] Example: export CUDA_HOME=/usr/local/cuda-12.4"
+        fi
+    else
+        echo "[INFO] Using CUDA_HOME: $CUDA_HOME"
+    fi
+fi
+
 if [ "$NEW_ENV" = true ] ; then
     conda create -n trellis2 python=3.10
     conda activate trellis2
@@ -86,7 +106,7 @@ fi
 
 if [ "$FLASHATTN" = true ] ; then
     if [ "$PLATFORM" = "cuda" ] ; then
-        pip install flash-attn==2.7.3
+        pip install flash-attn==2.7.3 --no-build-isolation
     elif [ "$PLATFORM" = "hip" ] ; then
         echo "[FLASHATTN] Prebuilt binaries not found. Building from source..."
         mkdir -p /tmp/extensions
@@ -112,7 +132,11 @@ fi
 
 if [ "$NVDIFFREC" = true ] ; then
     if [ "$PLATFORM" = "cuda" ] ; then
+        echo "[NVDIFFREC] Setting CUDA library paths..."
+        export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:${CUDA_HOME}/lib64/stubs:${LIBRARY_PATH}
+        export LDFLAGS="-L/usr/lib/x86_64-linux-gnu -L${CUDA_HOME}/lib64/stubs"
         mkdir -p /tmp/extensions
+        rm -rf /tmp/extensions/nvdiffrec
         git clone -b renderutils https://github.com/JeffreyXiang/nvdiffrec.git /tmp/extensions/nvdiffrec
         pip install /tmp/extensions/nvdiffrec --no-build-isolation
     else
@@ -121,8 +145,20 @@ if [ "$NVDIFFREC" = true ] ; then
 fi
 
 if [ "$CUMESH" = true ] ; then
+    echo "[CUMESH] Setting CUDA library paths..."
+    export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:${CUDA_HOME}/lib64/stubs:${LIBRARY_PATH}
+    export LDFLAGS="-L/usr/lib/x86_64-linux-gnu -L${CUDA_HOME}/lib64/stubs"
     mkdir -p /tmp/extensions
-    git clone https://github.com/JeffreyXiang/CuMesh.git /tmp/extensions/CuMesh --recursive
+    rm -rf /tmp/extensions/CuMesh
+    echo "[CUMESH] Cloning repository..."
+    git clone https://github.com/JeffreyXiang/CuMesh.git /tmp/extensions/CuMesh
+    cd /tmp/extensions/CuMesh
+    echo "[CUMESH] Fixing submodule URLs to use HTTPS..."
+    git config --file=.gitmodules submodule.third_party/cubvh.url https://github.com/JeffreyXiang/cubvh.git
+    git submodule sync
+    echo "[CUMESH] Initializing submodules..."
+    git submodule update --init --recursive
+    cd $WORKDIR
     pip install /tmp/extensions/CuMesh --no-build-isolation
 fi
 
@@ -133,7 +169,16 @@ if [ "$FLEXGEMM" = true ] ; then
 fi
 
 if [ "$OVOXEL" = true ] ; then
+    echo "[O-VOXEL] Setting CUDA library paths..."
+    export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:${CUDA_HOME}/lib64/stubs:${LIBRARY_PATH}
+    export LDFLAGS="-L/usr/lib/x86_64-linux-gnu -L${CUDA_HOME}/lib64/stubs"
     mkdir -p /tmp/extensions
+    rm -rf /tmp/extensions/o-voxel
     cp -r o-voxel /tmp/extensions/o-voxel
+    echo "[O-VOXEL] Fixing dependencies to avoid git reinstall..."
+    cd /tmp/extensions/o-voxel
+    sed -i 's|cumesh @ git+https://github.com/JeffreyXiang/CuMesh.git|"cumesh"|' pyproject.toml
+    sed -i 's|flex_gemm @ git+https://github.com/JeffreyXiang/FlexGEMM.git|"flex_gemm"|' pyproject.toml
+    cd $WORKDIR
     pip install /tmp/extensions/o-voxel --no-build-isolation
 fi
