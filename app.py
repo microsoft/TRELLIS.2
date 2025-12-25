@@ -1,4 +1,5 @@
 import gradio as gr
+import argparse
 
 import os
 os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '1'
@@ -616,6 +617,36 @@ with gr.Blocks(delete_cache=(600, 600)) as demo:
 
 # Launch the Gradio app
 if __name__ == "__main__":
+    # Parse command line arguments for server configuration
+    parser = argparse.ArgumentParser(description='TRELLIS.2 Image to 3D Demo')
+    parser.add_argument('--server-name', type=str, default=None,
+                        help='Server name/IP to bind to. Use "0.0.0.0" for WSL2 or Docker environments.')
+    parser.add_argument('--server-port', type=int, default=7860,
+                        help='Port to run the server on (default: 7860)')
+    parser.add_argument('--share', action='store_true',
+                        help='Create a public Gradio share link')
+    args = parser.parse_args()
+
+    # Auto-detect WSL2 environment and set appropriate server_name
+    server_name = args.server_name
+    if server_name is None:
+        # Check if running in WSL2
+        is_wsl = False
+        try:
+            with open('/proc/version', 'r') as f:
+                is_wsl = 'microsoft' in f.read().lower() or 'wsl' in f.read().lower()
+        except:
+            pass
+        
+        # Also check WSL_DISTRO_NAME environment variable
+        if os.environ.get('WSL_DISTRO_NAME') or os.environ.get('WSL_INTEROP'):
+            is_wsl = True
+        
+        if is_wsl:
+            server_name = "0.0.0.0"
+            print("WSL2 environment detected. Using server_name='0.0.0.0' for better compatibility.")
+            print("Access the app at http://localhost:{} from your Windows browser.".format(args.server_port))
+
     os.makedirs(TMP_DIR, exist_ok=True)
 
     # Construct ui components
@@ -642,4 +673,10 @@ if __name__ == "__main__":
         )),
     }
     
-    demo.launch(css=css, head=head)
+    demo.launch(
+        css=css, 
+        head=head,
+        server_name=server_name,
+        server_port=args.server_port,
+        share=args.share,
+    )
