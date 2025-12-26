@@ -1,0 +1,11 @@
+# Dependencies for deploying TRELLIS.2 to Modal
+# Install with: pip install -r requirements-deploy.txt
+#
+# These are minimal dependencies needed locally to run:
+#   modal deploy -m trellis2_modal.service.service
+#
+# Note: The Modal container image has its own dependencies
+# defined in service/image.py
+
+modal
+fastapi

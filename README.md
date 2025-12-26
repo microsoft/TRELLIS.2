@@ -186,6 +186,25 @@ Then, you can access the demo at the address shown in the terminal.
 
 Please refer to the [example_texturing.py](example_texturing.py) for an example of how to generate PBR textures for a given 3D shape. Also, you can use the [app_texturing.py](app_texturing.py) to run a web demo for PBR texture generation.
 
+## ☁️ Cloud Deployment (Modal)
+
+This fork adds support for deploying TRELLIS.2 to [Modal](https://modal.com/)'s serverless GPU infrastructure. Run image-to-3D generation without a local GPU:
+
+- **No local GPU needed** - runs on cloud A100s
+- **Pay-per-use** - ~$0.05 per generation
+- **Web UI or API** - access from any device
+
+```bash
+# Deploy to Modal
+modal deploy -m trellis2_modal.service.service
+
+# Run the local client
+python -m trellis2_modal.client.app
+```
+
+See **[trellis2_modal/README.md](trellis2_modal/README.md)** for setup instructions.
+
+
 ## 🧩 Related Packages
 
 TRELLIS.2 is built upon several specialized high-performance packages developed by our team:
