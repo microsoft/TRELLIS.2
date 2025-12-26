@@ -89,7 +89,7 @@ Expected output:
 
 ### 2. Deploy the Service
 
-Deploy to Modal with memory snapshots enabled:
+Deploy to Modal:
 
 ```bash
 modal deploy -m trellis2_modal.service.service
@@ -179,34 +179,138 @@ Open http://localhost:7860 in your browser.
 from trellis2_modal.client import TRELLIS2APIClient
 
 # Credentials loaded automatically from env vars or ~/.trellis2_modal_secrets.json
-client = TRELLIS2APIClient(base_url="https://your-app.modal.run")
+client = TRELLIS2APIClient(base_url="https://your-app--generate.modal.run")
 
 # Or provide credentials explicitly:
 # client = TRELLIS2APIClient(
-#     base_url="https://your-app.modal.run",
+#     base_url="https://your-app--generate.modal.run",
 #     modal_key="wk-xxxxx",
 #     modal_secret="ws-xxxxx",
 # )
 
-# Generate 3D from image
-result = client.generate(
-    image_path="input.png",
-    seed=42,
-    pipeline_type="1024_cascade",  # Options: 512, 1024, 1024_cascade, 1536_cascade
-)
+# Generate 3D from image (uses defaults)
+result = client.generate(image_path="input.png")
 
 # result contains:
 # - state: compressed state for GLB extraction
 # - video: base64-encoded MP4 preview
 
-# Extract GLB
+# Extract GLB with default settings (high quality)
 client.extract_glb(
     state=result["state"],
     output_path="output.glb",
-    decimation_target=500000,
-    texture_size=2048,
+)
+
+# Or for game engines with polygon limits:
+client.extract_glb(
+    state=result["state"],
+    output_path="game_asset.glb",
+    decimation_target=10000,   # ~10K triangles
+    texture_size=1024,
 )
 ```
+
+## Complete API Reference
+
+### `client.generate()` Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `image_path` | str | *required* | Path to input image (PNG, JPEG) |
+| `seed` | int | 42 | Random seed for reproducibility |
+| `pipeline_type` | str | "1024_cascade" | Resolution pipeline (see below) |
+| `ss_sampling_steps` | int | 12 | Sparse structure denoising steps |
+| `ss_guidance_strength` | float | 7.5 | Sparse structure guidance |
+| `shape_slat_sampling_steps` | int | 12 | Shape refinement denoising steps |
+| `shape_slat_guidance_strength` | float | 7.5 | Shape refinement guidance |
+| `tex_slat_sampling_steps` | int | 12 | Texture generation denoising steps |
+| `tex_slat_guidance_strength` | float | 1.0 | Texture generation guidance |
+
+#### Understanding the Three-Stage Pipeline
+
+TRELLIS.2 generates 3D models in three stages:
+
+1. **Sparse Structure (SS)**: Creates the initial coarse 3D voxel structure from the input image. This determines the overall shape and proportions.
+
+2. **Shape SLAT (Structured Latent)**: Refines the geometry to the target resolution, adding fine geometric details like edges, corners, and surface features.
+
+3. **Texture SLAT**: Generates PBR (Physically-Based Rendering) materials including base color, metallic, roughness, and opacity.
+
+#### Input Image Guidelines
+
+Quality of results depends heavily on input image preparation:
+
+**Optimal inputs:**
+- Clean, well-lit subject against neutral/solid background
+- Object centered in frame with minimal perspective distortion
+- Resolution at least 512×512 (1024×1024 recommended)
+- Clear separation between subject and background
+- Consistent lighting without harsh shadows or specular highlights
+
+**Problematic inputs:**
+- Cluttered backgrounds (confuses edge detection)
+- Extreme perspective angles or fish-eye distortion
+- Low resolution or heavily compressed images
+- Transparent or highly reflective surfaces
+- Multiple overlapping objects
+
+#### Parameter Tuning Guide
+
+**Sampling Steps** (`*_sampling_steps`):
+- Controls quality vs speed tradeoff
+- Default of 12 is well-balanced
+- 8 steps: Faster but may have artifacts
+- 16-20 steps: Higher quality, diminishing returns beyond
+- Each additional step adds ~1-2 seconds
+
+**Guidance Strength** (`*_guidance_strength`):
+- Controls how closely output follows the input image
+- **Shape stages (7.5 default)**: Higher values produce more faithful reconstructions
+  - 5.0-7.5: Good balance of accuracy and natural appearance
+  - 10.0-15.0: Very literal interpretation, may cause rigidity
+  - Below 3.0: More creative but may drift from input
+- **Texture stage (1.0 default)**: Lower values allow natural material variation
+  - 1.0: Natural-looking materials
+  - 3.0-5.0: More constrained to input colors
+  - Higher: May produce flat, unnatural textures
+
+#### Tuning by Object Type
+
+| Object Type | SS Guidance | Shape Guidance | Notes |
+|-------------|-------------|----------------|-------|
+| **Hard-surface** (furniture, vehicles, architecture) | 8-9 | 7.5 | Stricter geometric adherence |
+| **Organic** (characters, plants, fabric) | 7.5 | 7.5 | Default values work well |
+| **Ambiguous shapes** | 5-7 | 5-7 | Lower guidance for coherence |
+
+**Tip**: Use the `seed` parameter for reproducibility. When you find settings that work well for a particular object type, record the seed to generate consistent results across similar inputs.
+
+### `client.extract_glb()` Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `state` | str | *required* | Base64 state from `generate()` |
+| `output_path` | str | *required* | Where to save the GLB file |
+| `decimation_target` | int | 1,000,000 | Target triangle count |
+| `texture_size` | int | 4096 | Texture resolution (512/1024/2048/4096) |
+| `remesh` | bool | True | Clean up mesh topology |
+| `remesh_band` | float | 1.0 | Remesh band size |
+| `remesh_project` | float | 0.0 | Remesh projection factor |
+
+### GLB Extraction Presets
+
+| Use Case | decimation_target | texture_size | Approx Size |
+|----------|-------------------|--------------|-------------|
+| **Maximum Quality** | 1,000,000 | 4096 | ~30MB |
+| **Web Viewers / Sketchfab** | 100,000 | 2048 | ~5MB |
+| **Game Engines (Unity/Unreal/Godot)** | 10,000 | 1024 | ~1MB |
+| **Mobile / AR** | 5,000 | 512 | ~300KB |
+| **Low-poly / Stylized** | 2,000 | 512 | ~150KB |
+
+**Platform-specific notes**:
+- **Unity/Unreal**: GLB imports directly; may need material adjustment for opacity
+- **Godot**: Native GLB support with PBR materials
+- **Web (Three.js, Babylon.js)**: Use Web/Viewer preset for good balance
+- **Some platforms require FBX**: Convert via Blender if GLB not supported
 
 ## Configuration
 
@@ -226,14 +330,6 @@ The A100-80GB provides:
 | `1024` | 1024³ | ~25s | Good quality |
 | `1024_cascade` | 512→1024 | ~30s | High quality (recommended) |
 | `1536_cascade` | 512→1536 | ~90s | Maximum quality |
-
-### GLB Extraction Presets
-
-| Preset | decimation_target | texture_size | File Size |
-|--------|-------------------|--------------|-----------|
-| Quality | 1,000,000 | 4096 | ~30MB |
-| Balanced | 500,000 | 2048 | ~15MB |
-| Fast | 100,000 | 1024 | ~5MB |
 
 ## Cold Starts
 
