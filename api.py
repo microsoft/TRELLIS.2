@@ -73,7 +73,7 @@ class JobStatus(str, Enum):
     EXTRACTING_MESH = "extracting_mesh"  # Creating mesh-only GLB
     EXTRACTING_TEXTURED = "extracting_textured"  # Creating textured GLB
     COMPLETED = "completed"
-    FAILED = "failed"
+    FAILED = "error"
 
 
 class SendRequest(BaseModel):
@@ -94,7 +94,7 @@ class SendRequest(BaseModel):
         default=-1,
         description="Target face count for mesh. -1 = use default based on resolution, otherwise use specified value"
     )
-    seed: int = Field(
+    seed: Optional[int] = Field(
         default=-1,
         description="Random seed. -1 = random seed, otherwise use specified value"
     )
