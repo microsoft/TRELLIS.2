@@ -87,14 +87,17 @@ class SendRequest(BaseModel):
         description="Resolution: 512, 1024, or 1536"
     )
     texture_resolution: int = Field(
-        default=1024,
-        description="Texture resolution in pixels (1024, 2048, 3072, 4096)"
+        default=-1,
+        description="Texture resolution in pixels. -1 = use default based on resolution, or specify: 1024, 2048, 3072, 4096"
     )
     face_count: int = Field(
         default=-1,
         description="Target face count for mesh. -1 = use default based on resolution, otherwise use specified value"
     )
-    seed: Optional[int] = Field(default=None, description="Random seed (None for random)")
+    seed: int = Field(
+        default=-1,
+        description="Random seed. -1 = random seed, otherwise use specified value"
+    )
 
 
 class GenerateRequest(BaseModel):
@@ -536,9 +539,14 @@ async def send(request: SendRequest, background_tasks: BackgroundTasks):
     Parameters:
     - image_base64: Base64 encoded image
     - resolution: 512, 1024, or 1536
-    - texture_resolution: Texture size in pixels (1024, 2048, 4096)
+    - texture_resolution: Texture size in pixels (-1 for auto based on resolution, or 1024/2048/3072/4096)
     - face_count: Target faces (-1 for auto based on resolution)
-    - seed: Optional random seed
+    - seed: Random seed (-1 for random, or specify a positive integer for reproducibility)
+    
+    Default mappings when -1 is used:
+    - Resolution 512:  face_count=200000,  texture_resolution=1024
+    - Resolution 1024: face_count=500000,  texture_resolution=2048
+    - Resolution 1536: face_count=1000000, texture_resolution=4096
     
     Returns a job_id to check status via GET /status/{job_id}
     """
@@ -547,17 +555,30 @@ async def send(request: SendRequest, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Resolution must be 512, 1024, or 1536")
     
     # Map resolution to default decimation target
-    resolution_mapping = {
+    face_count_mapping = {
         512: 200000,    # Low detail, fast
         1024: 500000,   # Medium detail
         1536: 1000000,  # High detail, slow
+    }
+    
+    # Map resolution to default texture resolution
+    texture_resolution_mapping = {
+        512: 1024,      # Low detail
+        1024: 2048,     # Medium detail
+        1536: 4096,     # High detail
     }
     
     # Use custom face_count if specified, otherwise use default from resolution
     if request.face_count > 0:
         decimation_target = request.face_count
     else:
-        decimation_target = resolution_mapping[request.resolution]
+        decimation_target = face_count_mapping[request.resolution]
+    
+    # Use custom texture_resolution if specified, otherwise use default from resolution
+    if request.texture_resolution > 0:
+        texture_size = request.texture_resolution
+    else:
+        texture_size = texture_resolution_mapping[request.resolution]
     
     # Validate base64 image
     try:
@@ -565,13 +586,16 @@ async def send(request: SendRequest, background_tasks: BackgroundTasks):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid base64 image: {str(e)}")
     
+    # Handle seed: -1 means random (None), otherwise use specified value
+    actual_seed = None if request.seed < 0 else request.seed
+    
     # Convert to full GenerateRequest
     full_request = GenerateRequest(
         image_base64=request.image_base64,
         resolution=str(request.resolution),
-        seed=request.seed,
+        seed=actual_seed,
         decimation_target=decimation_target,
-        texture_size=request.texture_resolution,
+        texture_size=texture_size,
     )
     
     # Create job
