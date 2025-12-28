@@ -96,7 +96,7 @@ class SendRequest(BaseModel):
     )
     seed: Optional[int] = Field(
         default=-1,
-        description="Random seed. -1 = random seed, otherwise use specified value"
+        description="Random seed. -1 or null = random seed, otherwise use specified value"
     )
 
 
@@ -586,8 +586,8 @@ async def send(request: SendRequest, background_tasks: BackgroundTasks):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid base64 image: {str(e)}")
     
-    # Handle seed: -1 means random (None), otherwise use specified value
-    actual_seed = None if request.seed < 0 else request.seed
+    # Handle seed: -1 or None means random, otherwise use specified value
+    actual_seed = None if (request.seed is None or request.seed < 0) else request.seed
     
     # Convert to full GenerateRequest
     full_request = GenerateRequest(
