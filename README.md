@@ -1,3 +1,10 @@
+New Features of this Fork 
+* API: [Synchronous API](./api.py) and [Asynchronous API](./trellis2_api), which can be used as stateless endpoints or work with [TRELLIS-Blender](https://github.com/FishWoWater/trellis_blender). Detailed doc provided [here](./README_api.md).
+* Deployment: [Docker Support](./Dockerfile) and [Cog(Replicate) Support](./cog.yaml)
+* I have added Z-image-turbo for text-to-3d in the api.
+
+========= README OF ORIGINAL REPO TRELLIS.2 =========
+
 ![](assets/teaser.webp)
 
 # Native and Compact Structured Latents for 3D Generation
