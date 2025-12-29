@@ -11,6 +11,48 @@ import nvdiffrast.torch as dr
 import cumesh
 
 
+def _batched_unsigned_distance(bvh, positions, batch_size=100000, return_uvw=False):
+    """
+    Batch unsigned_distance queries to avoid GPU kernel timeout on large meshes.
+
+    When processing high-resolution textures (e.g., 2048x2048 = ~4M pixels) on complex
+    meshes, a single BVH query can cause GPU watchdog timeout. This function splits
+    the query into smaller batches.
+
+    Args:
+        bvh: The BVH structure from cumesh
+        positions: (N, 3) tensor of query positions
+        batch_size: Maximum number of queries per batch (default 100K, matching
+            the rasterization chunk size used elsewhere in this file)
+        return_uvw: Whether to return barycentric coordinates
+
+    Returns:
+        Same as bvh.unsigned_distance()
+    """
+    import torch
+    N = positions.shape[0]
+    if N <= batch_size:
+        return bvh.unsigned_distance(positions, return_uvw=return_uvw)
+
+    distances_list = []
+    face_id_list = []
+    uvw_list = [] if return_uvw else None
+
+    for i in range(0, N, batch_size):
+        end = min(i + batch_size, N)
+        d, f, u = bvh.unsigned_distance(positions[i:end], return_uvw=return_uvw)
+        distances_list.append(d)
+        face_id_list.append(f)
+        if return_uvw:
+            uvw_list.append(u)
+
+    return (
+        torch.cat(distances_list),
+        torch.cat(face_id_list),
+        torch.cat(uvw_list) if return_uvw else None
+    )
+
+
 def to_glb(
     vertices: torch.Tensor,
     faces: torch.Tensor,
@@ -251,7 +293,7 @@ def to_glb(
     
     # Map these positions back to the *original* high-res mesh to get accurate attributes
     # This corrects geometric errors introduced by simplification/remeshing
-    _, face_id, uvw = bvh.unsigned_distance(valid_pos, return_uvw=True)
+    _, face_id, uvw = _batched_unsigned_distance(bvh, valid_pos, return_uvw=True)
     orig_tri_verts = vertices[faces[face_id.long()]] # (N_new, 3, 3)
     valid_pos = (orig_tri_verts * uvw.unsqueeze(-1)).sum(dim=1)
     
