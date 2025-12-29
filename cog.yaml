@@ -1,0 +1,73 @@
+# Configuration for Cog ⚙️
+# Reference: https://cog.run/yaml
+
+build:
+  gpu: true
+  cuda: "12.4"
+
+  system_packages:
+    - "git"
+    - "wget"
+    - "libjpeg-dev"
+    - "libwebp-dev"
+    - "libeigen3-dev"
+    - "build-essential"
+
+  python_version: "3.10"
+
+  python_packages:
+    # Build dependencies (must be first)
+    - "pip>=24.0"
+    - "setuptools>=70.0"
+    - "wheel"
+    - "ninja"
+
+  run:
+    # Set environment variables
+    - echo "export OPENCV_IO_ENABLE_OPENEXR='1'" >> ~/.bashrc
+    - echo "export PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'" >> ~/.bashrc
+    - echo "export CUDA_HOME=/usr/local/cuda" >> ~/.bashrc
+    - echo "export TORCH_CUDA_ARCH_LIST='6.0 6.1 7.0 7.5 8.0 8.6+PTX'" >> ~/.bashrc
+    
+    # Update pip first
+    - pip install --upgrade pip setuptools
+    
+    # Install PyTorch and CUDA dependencies first
+    - pip install --no-cache-dir torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+    
+    # Install flash-attention
+    # - pip install --no-cache-dir flash-attn==2.7.3
+    - pip install https://fishwowater.oss-cn-shenzhen.aliyuncs.com/flash_attn-2.7.3-cp310-cp310-linux_x86_64.whl
+    
+    # Install basic dependencies
+    - pip install --no-cache-dir imageio imageio-ffmpeg tqdm easydict opencv-python-headless ninja trimesh transformers tensorboard pandas lpips zstandard
+    - pip install --no-cache-dir pillow-simd
+    - pip install --no-cache-dir kornia timm
+    
+    # Install utils3d
+    - pip install --no-cache-dir git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
+    
+    # Install nvdiffrast
+    - git clone -b v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast
+    - TORCH_CUDA_ARCH_LIST='6.0 6.1 7.0 7.5 8.0 8.6+PTX' pip install /tmp/nvdiffrast --no-build-isolation
+    
+    # Install nvdiffrec
+    - git clone -b renderutils https://github.com/JeffreyXiang/nvdiffrec.git /tmp/nvdiffrec
+    - TORCH_CUDA_ARCH_LIST='6.0 6.1 7.0 7.5 8.0 8.6+PTX' pip install /tmp/nvdiffrec --no-build-isolation
+    
+    # Install CuMesh
+    - git clone https://github.com/JeffreyXiang/CuMesh.git /tmp/CuMesh --recursive
+    - TORCH_CUDA_ARCH_LIST='6.0 6.1 7.0 7.5 8.0 8.6+PTX' pip install /tmp/CuMesh --no-build-isolation
+    
+    # Install FlexGEMM
+    - git clone https://github.com/JeffreyXiang/FlexGEMM.git /tmp/FlexGEMM --recursive
+    - TORCH_CUDA_ARCH_LIST='6.0 6.1 7.0 7.5 8.0 8.6+PTX' pip install /tmp/FlexGEMM --no-build-isolation
+    
+    # Copy and install o-voxel (custom extension in the repo)
+    - pip install https://fishwowater.oss-cn-shenzhen.aliyuncs.com/o_voxel-0.0.1-cp310-cp310-linux_x86_64.whl --no-deps
+    - pip install modelscope
+    # - TORCH_CUDA_ARCH_LIST='6.0 6.1 7.0 7.5 8.0 8.6+PTX' pip install /tmp/o-voxel --no-build-isolation --no-deps
+
+predict: "predict.py:Predictor"
+
+image: "r8.im/fishwowater/trellis2"

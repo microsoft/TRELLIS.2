@@ -1,0 +1,11 @@
+# FastAPI server dependencies
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+pydantic>=2.5.0
+requests>=2.31.0
+
+# Text-to-image generation (optional, loaded on demand)
+diffusers>=0.30.0
+modelscope
+sqlalchemy>=1.4.0
