@@ -304,7 +304,7 @@ void boundry_qef(
         // Calculate the QEF for the edge (boundary) defined by v0 and v1
         Eigen::Vector3d dir(v1.x() - v0.x(), v1.y() - v0.y(), v1.z() - v0.z());
         double segment_length = dir.norm();
-        if (segment_length < 1e-6d) continue; // Skip degenerate edges (zero-length)
+        if (segment_length < 1e-6) continue; // Skip degenerate edges (zero-length)
         dir.normalize();  // unit direction vector
 
         // Projection matrix orthogonal to the direction: I - d d^T
@@ -334,7 +334,7 @@ void boundry_qef(
 
         Eigen::Vector3d tMax, tDelta;
         for (int axis = 0; axis < 3; ++axis) {
-            if (dir[axis] == 0.0d) {
+            if (dir[axis] == 0.0) {
                 tMax[axis] = std::numeric_limits<double>::infinity();
                 tDelta[axis] = std::numeric_limits<double>::infinity();
             } else {
