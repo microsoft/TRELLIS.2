@@ -139,9 +139,61 @@ if [ "$PLATFORM" = "cuda" ] ; then
     export LIBRARY_PATH="$CUDA_HOME/lib64:${LIBRARY_PATH:-}"
     export CPATH="$CUDA_HOME/include:${CPATH:-}"
     
+    # ============================================
+    # Find libcuda.so (NVIDIA driver library)
+    # This is needed by nvdiffrec and other extensions
+    # ============================================
+    echo "[CUDA] Searching for libcuda.so..."
+    LIBCUDA_PATH=""
+    
+    # Common locations for libcuda.so
+    LIBCUDA_SEARCH_PATHS=(
+        "/usr/lib/x86_64-linux-gnu"
+        "/usr/lib64"
+        "/usr/local/cuda/lib64/stubs"
+        "$CUDA_HOME/lib64/stubs"
+        "/usr/lib/wsl/lib"
+    )
+    
+    for lib_path in "${LIBCUDA_SEARCH_PATHS[@]}"; do
+        if [ -f "$lib_path/libcuda.so" ] || [ -f "$lib_path/libcuda.so.1" ]; then
+            LIBCUDA_PATH="$lib_path"
+            echo "[CUDA] Found libcuda.so at: $LIBCUDA_PATH"
+            break
+        fi
+    done
+    
+    # If not found, search for it
+    if [ -z "$LIBCUDA_PATH" ]; then
+        FOUND_LIBCUDA=$(find /usr -name "libcuda.so*" 2>/dev/null | head -1)
+        if [ -n "$FOUND_LIBCUDA" ]; then
+            LIBCUDA_PATH=$(dirname "$FOUND_LIBCUDA")
+            echo "[CUDA] Found libcuda.so by searching: $LIBCUDA_PATH"
+        fi
+    fi
+    
+    # Add libcuda to library paths
+    if [ -n "$LIBCUDA_PATH" ]; then
+        export LIBRARY_PATH="$LIBCUDA_PATH:$LIBRARY_PATH"
+        export LD_LIBRARY_PATH="$LIBCUDA_PATH:$LD_LIBRARY_PATH"
+        export LDFLAGS="-L$LIBCUDA_PATH ${LDFLAGS:-}"
+    else
+        echo "[CUDA] WARNING: libcuda.so not found. Some extensions may fail to build."
+        echo "[CUDA] Adding common fallback paths..."
+        export LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/lib64:$LIBRARY_PATH"
+        export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/lib64:$LD_LIBRARY_PATH"
+    fi
+    
+    # Also check for CUDA stubs (sometimes needed for linking)
+    if [ -d "$CUDA_HOME/lib64/stubs" ]; then
+        export LIBRARY_PATH="$CUDA_HOME/lib64/stubs:$LIBRARY_PATH"
+        echo "[CUDA] Added CUDA stubs to LIBRARY_PATH"
+    fi
+    
     # Print CUDA version for verification
     echo "[CUDA] CUDA_HOME = $CUDA_HOME"
     echo "[CUDA] nvcc version: $($CUDA_HOME/bin/nvcc --version | grep release | awk '{print $5}' | tr -d ',')"
+    echo "[CUDA] LIBRARY_PATH = $LIBRARY_PATH"
 fi
 
 if [ "$NEW_ENV" = true ] ; then
@@ -213,37 +265,8 @@ if [ "$NVDIFFREC" = true ] ; then
         if [ ! -d "/tmp/extensions/nvdiffrec" ]; then
             git clone -b renderutils https://github.com/JeffreyXiang/nvdiffrec.git /tmp/extensions/nvdiffrec
         fi
-        
-        # Find libcuda.so (NVIDIA driver library)
-        LIBCUDA_PATH=$(find /usr -name "libcuda.so*" 2>/dev/null | head -1)
-        if [ -z "$LIBCUDA_PATH" ]; then
-            # Try wider search
-            LIBCUDA_PATH=$(find / -name "libcuda.so*" 2>/dev/null | grep -v "/proc\|/sys\|/dev" | head -1)
-        fi
-        
-        if [ -n "$LIBCUDA_PATH" ]; then
-            LIBCUDA_DIR=$(dirname "$LIBCUDA_PATH")
-            echo "[NVDIFFREC] Found libcuda.so at: $LIBCUDA_PATH"
-            
-            # Set library paths for the linker
-            export LIBRARY_PATH=${LIBRARY_PATH}:${LIBCUDA_DIR}
-            export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${LIBCUDA_DIR}
-            
-            # Also add common CUDA library locations
-            if [ -n "$CUDA_HOME" ]; then
-                export LIBRARY_PATH=${LIBRARY_PATH}:${CUDA_HOME}/lib64
-            else
-                export LIBRARY_PATH=${LIBRARY_PATH}:/usr/local/cuda-12.4/lib64:/usr/local/cuda/lib64
-            fi
-            
-            # Set LDFLAGS to help the linker find libcuda
-            export LDFLAGS="-L${LIBCUDA_DIR} ${LDFLAGS}"
-        else
-            echo "[NVDIFFREC] Warning: libcuda.so not found. Trying default locations..."
-            export LIBRARY_PATH=${LIBRARY_PATH}:/usr/lib/x86_64-linux-gnu:/usr/lib64
-            export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/x86_64-linux-gnu:/usr/lib64
-        fi
-        
+        # libcuda.so paths are already set globally at the start
+        echo "[NVDIFFREC] Building nvdiffrec_render..."
         pip install /tmp/extensions/nvdiffrec --no-build-isolation
     else
         echo "[NVDIFFREC] Unsupported platform: $PLATFORM"
