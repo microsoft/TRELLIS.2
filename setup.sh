@@ -66,6 +66,84 @@ else
     exit 1
 fi
 
+# ============================================
+# CUDA_HOME Detection and Setup (Critical!)
+# ============================================
+if [ "$PLATFORM" = "cuda" ] ; then
+    # Check if CUDA_HOME is already set
+    if [ -z "$CUDA_HOME" ]; then
+        echo "[CUDA] CUDA_HOME not set. Searching for CUDA installation..."
+        
+        # Common CUDA installation paths (check in order of preference)
+        CUDA_SEARCH_PATHS=(
+            "/usr/local/cuda"
+            "/usr/local/cuda-12.4"
+            "/usr/local/cuda-12.6"
+            "/usr/local/cuda-12.5"
+            "/usr/local/cuda-12.3"
+            "/usr/local/cuda-12.2"
+            "/usr/local/cuda-12.1"
+            "/usr/local/cuda-12.0"
+            "/usr/local/cuda-11.8"
+            "/opt/cuda"
+            "/usr/cuda"
+        )
+        
+        for cuda_path in "${CUDA_SEARCH_PATHS[@]}"; do
+            if [ -d "$cuda_path" ] && [ -f "$cuda_path/bin/nvcc" ]; then
+                export CUDA_HOME="$cuda_path"
+                echo "[CUDA] Found CUDA at: $CUDA_HOME"
+                break
+            fi
+        done
+        
+        # If still not found, try to find nvcc and derive CUDA_HOME
+        if [ -z "$CUDA_HOME" ]; then
+            NVCC_PATH=$(which nvcc 2>/dev/null)
+            if [ -n "$NVCC_PATH" ]; then
+                export CUDA_HOME=$(dirname $(dirname "$NVCC_PATH"))
+                echo "[CUDA] Found CUDA via nvcc at: $CUDA_HOME"
+            fi
+        fi
+        
+        # Last resort: search for nvcc
+        if [ -z "$CUDA_HOME" ]; then
+            NVCC_FOUND=$(find /usr -name "nvcc" -type f 2>/dev/null | head -1)
+            if [ -n "$NVCC_FOUND" ]; then
+                export CUDA_HOME=$(dirname $(dirname "$NVCC_FOUND"))
+                echo "[CUDA] Found CUDA by searching: $CUDA_HOME"
+            fi
+        fi
+    else
+        echo "[CUDA] Using existing CUDA_HOME: $CUDA_HOME"
+    fi
+    
+    # Verify CUDA_HOME is valid
+    if [ -z "$CUDA_HOME" ] || [ ! -d "$CUDA_HOME" ]; then
+        echo "[CUDA] ERROR: Could not find CUDA installation!"
+        echo "[CUDA] Please install CUDA toolkit or set CUDA_HOME manually:"
+        echo "       export CUDA_HOME=/path/to/cuda"
+        exit 1
+    fi
+    
+    # Verify nvcc exists
+    if [ ! -f "$CUDA_HOME/bin/nvcc" ]; then
+        echo "[CUDA] ERROR: nvcc not found at $CUDA_HOME/bin/nvcc"
+        echo "[CUDA] Make sure you have the CUDA toolkit installed (not just drivers)"
+        exit 1
+    fi
+    
+    # Set up PATH and library paths
+    export PATH="$CUDA_HOME/bin:$PATH"
+    export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
+    export LIBRARY_PATH="$CUDA_HOME/lib64:${LIBRARY_PATH:-}"
+    export CPATH="$CUDA_HOME/include:${CPATH:-}"
+    
+    # Print CUDA version for verification
+    echo "[CUDA] CUDA_HOME = $CUDA_HOME"
+    echo "[CUDA] nvcc version: $($CUDA_HOME/bin/nvcc --version | grep release | awk '{print $5}' | tr -d ',')"
+fi
+
 if [ "$NEW_ENV" = true ] ; then
     conda create -n trellis2 python=3.10
     conda activate trellis2
