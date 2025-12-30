@@ -637,8 +637,8 @@ async def get_status(job_id: str):
     - starting → sculpting → meshing → texturing → 
       extracting_mesh → extracting_textured → completed
     
-    When mesh_only_ready=True, response includes mesh_only_base64 (geometry-only GLB).
-    When textured_ready=True (completed), response includes glb_base64 (textured GLB).
+    Base64 GLB files are only included when status is 'completed'.
+    Use /result/{job_id} to fetch the files at any time after they're ready.
     """
     with jobs_lock:
         job = jobs.get(job_id)
@@ -646,17 +646,18 @@ async def get_status(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
     
-    # Encode files to base64 when available
+    # Encode files to base64 only when job is fully completed
     mesh_only_base64 = None
     glb_base64 = None
     
-    # Include mesh-only GLB when ready
-    if job.mesh_only_ready and job.mesh_only_path and os.path.exists(job.mesh_only_path):
-        mesh_only_base64 = encode_file_to_base64(job.mesh_only_path)
-    
-    # Include textured GLB when ready
-    if job.textured_ready and job.glb_path and os.path.exists(job.glb_path):
-        glb_base64 = encode_file_to_base64(job.glb_path)
+    if job.status == JobStatus.COMPLETED:
+        # Include mesh-only GLB when ready
+        if job.mesh_only_ready and job.mesh_only_path and os.path.exists(job.mesh_only_path):
+            mesh_only_base64 = encode_file_to_base64(job.mesh_only_path)
+        
+        # Include textured GLB when ready
+        if job.textured_ready and job.glb_path and os.path.exists(job.glb_path):
+            glb_base64 = encode_file_to_base64(job.glb_path)
     
     return StatusResponse(
         job_id=job.job_id,
