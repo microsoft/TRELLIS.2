@@ -51,7 +51,7 @@ import o_voxel
 # =============================================================================
 
 # Maximum concurrent GPU jobs (for 96GB VRAM, 2 is safe, 3 is aggressive)
-MAX_CONCURRENT_JOBS = 4
+MAX_CONCURRENT_JOBS = 2
 
 # Job expiration time in seconds (clean up old jobs)
 JOB_EXPIRATION_SECONDS = 3600  # 1 hour
