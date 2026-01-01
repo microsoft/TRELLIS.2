@@ -217,7 +217,7 @@ if [ "$BASIC" = true ] ; then
     pip install "huggingface-hub<1.0,>=0.34.0" "huggingface_hub[cli]"
     pip install kornia timm
     # FastAPI dependencies for API server
-    pip install fastapi uvicorn[standard] python-multipart
+    pip install fastapi uvicorn[standard] python-multipart boto3
 fi
 
 if [ "$FLASHATTN" = true ] ; then
