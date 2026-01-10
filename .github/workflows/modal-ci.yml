@@ -1,0 +1,121 @@
+name: Modal CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'trellis2_modal/**'
+      - '.github/workflows/modal-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'trellis2_modal/**'
+      - '.github/workflows/modal-ci.yml'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Run unit tests
+        run: |
+          uv run --with pytest --with lz4 --with numpy --with pillow --with modal --with fastapi --with requests \
+            pytest trellis2_modal/tests/ -v --tb=short
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Check formatting with ruff
+        run: |
+          uv run --with ruff ruff format --check trellis2_modal/
+
+      - name: Lint with ruff
+        run: |
+          uv run --with ruff ruff check trellis2_modal/
+
+  verify-image:
+    name: Verify Modal Image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, lint]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deploy dependencies
+        run: pip install -r trellis2_modal/requirements-deploy.txt
+
+      - name: Set up Modal credentials
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
+
+      - name: Verify image builds
+        run: modal run trellis2_modal/service/image.py
+        timeout-minutes: 30
+
+  deploy:
+    name: Deploy to Modal
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [verify-image]
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deploy dependencies
+        run: pip install -r trellis2_modal/requirements-deploy.txt
+
+      - name: Set up Modal credentials
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
+
+      - name: Deploy service
+        run: modal deploy -m trellis2_modal.service.service
+        timeout-minutes: 10
+
+      # Note: Health check removed because endpoint URL is dynamic
+      # Monitor deployment status in Modal dashboard instead

@@ -205,3 +205,11 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Temporary test files
+tmp/
+
+# Modal credentials - NEVER commit these!
+.trellis2_modal_secrets.json
+*_secrets.json
+*.secrets.json

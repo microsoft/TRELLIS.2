@@ -297,6 +297,25 @@ Higher-resolution fine-tuning can be performed by updating the `finetune_ckpt` f
 * `slat_flow_imgshape2tex_dit_1_3B_512_bf16_ft1024.json`
 
 
+## ☁️ Cloud Deployment (Modal)
+
+This fork adds support for deploying TRELLIS.2 to [Modal](https://modal.com/)'s serverless GPU infrastructure. Run image-to-3D generation without a local GPU:
+
+- **No local GPU needed** - runs on cloud A100s
+- **Pay-per-use** - ~$0.05 per generation
+- **Web UI or API** - access from any device
+
+```bash
+# Deploy to Modal
+modal deploy -m trellis2_modal.service.service
+
+# Run the local client
+python -m trellis2_modal.client.app
+```
+
+See **[trellis2_modal/README.md](trellis2_modal/README.md)** for setup instructions.
+
+
 ## 🧩 Related Packages
 
 TRELLIS.2 is built upon several specialized high-performance packages developed by our team:
