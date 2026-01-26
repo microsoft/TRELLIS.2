@@ -112,7 +112,6 @@ echo   MSSdk=%MSSdk%
 echo   USE_NINJA=%USE_NINJA%
 echo   MAX_JOBS=%MAX_JOBS%
 echo   CMAKE_BUILD_PARALLEL_LEVEL=%CMAKE_BUILD_PARALLEL_LEVEL%
-echo   TORCH_CUDA_ARCH_LIST=%TORCH_CUDA_ARCH_LIST%
 echo.
 
 :: -------------------------------------------------
@@ -142,15 +141,9 @@ if defined CUDA_PATH call set "PATH=%CUDA_PATH%\bin;%CUDA_PATH%\libnvvp;%PATH%"
 echo.
 echo %green%Building nvdiffrast...%reset%
 
-%PYTHON_PATH% -m pip uninstall -y nvdiffrast
-rmdir /s /q "%PYTHON_PATH%\Lib\site-packages\nvdiffrast" 2>nul
-
-if not exist nvdiffrec (
-    git clone --recursive https://github.com/NVlabs/nvdiffrec.git || exit /b 1
-)
-
 pushd nvdiffrast
-%PYTHON_PATH% setup.py install
+%PYTHON_PATH% -m pip uninstall -y nvdiffrast
+%PYTHON_PATH% -m pip install git+https://github.com/NVlabs/nvdiffrast.git --no-build-isolation --no-cache-dir
 popd
 
 echo %green%nvdiffrast build finished...%reset%
@@ -163,30 +156,14 @@ echo %green%Verifying nvdiffrast...%reset%
 )
 
 :: ===============================
-:: nvdiffrec (CODE ONLY)
-:: ===============================
-echo.
-echo %yellow%Cloning nvdiffrec (code-only, no build step)...%reset%
-
-if not exist nvdiffrec (
-    git clone --recursive https://github.com/NVlabs/nvdiffrec.git || exit /b 1
-)
-
-echo %green%nvdiffrec cloned successfully...%reset%
-
-:: ===============================
 :: FlexGEMM
 :: ===============================
 echo.
 echo %green%Building FlexGEMM...%reset%
 
-if not exist FlexGEMM (
-  git clone https://github.com/gustavomassa/FlexGEMM flexgemm || exit /b 1
-)
-
 pushd flexgemm
 %PYTHON_PATH% -m pip uninstall -y flex_gemm
-%PYTHON_PATH% -m pip install . --no-build-isolation
+%PYTHON_PATH% -m pip install git+https://github.com/JeffreyXiang/FlexGEMM --no-build-isolation --no-cache-dir
 popd
 
 echo %green%FlexGEMM build finished...%reset%
@@ -197,30 +174,15 @@ echo %green%FlexGEMM build finished...%reset%
 echo.
 echo %green%Building CuMesh...%reset%
 
-if not exist cumesh (
-  git clone --recursive https://github.com/gustavomassa/CuMesh cumesh || exit /b 1
-)
 pushd cumesh
 %PYTHON_PATH% -m pip uninstall -y cumesh
-%PYTHON_PATH% setup.py install
+%PYTHON_PATH% -m pip install git+https://github.com/JeffreyXiang/CuMesh --no-build-isolation --no-cache-dir
 popd
 
 echo %green%CuMesh build finished...%reset%
 
 :: ===============================
-:: TRELLIS.2 (CODE ONLY)
-:: ===============================
-echo.
-echo %yellow%Cloning trellis2...%reset%
-
-if not exist trellis2 (
-  git clone --recursive https://github.com/gustavomassa/TRELLIS.2 trellis2 || exit /b 1
-)
-
-echo %green%trellis2 cloned successfully...%reset%
-
-:: ===============================
-:: o-voxel (Inside TRELLIS.2)
+:: o-voxel
 :: ===============================
 echo.
 echo %green%Building o_voxel...%reset%
