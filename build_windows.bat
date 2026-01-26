@@ -141,10 +141,8 @@ if defined CUDA_PATH call set "PATH=%CUDA_PATH%\bin;%CUDA_PATH%\libnvvp;%PATH%"
 echo.
 echo %green%Building nvdiffrast...%reset%
 
-pushd nvdiffrast
 %PYTHON_PATH% -m pip uninstall -y nvdiffrast
 %PYTHON_PATH% -m pip install git+https://github.com/NVlabs/nvdiffrast.git --no-build-isolation --no-cache-dir
-popd
 
 echo %green%nvdiffrast build finished...%reset%
 
@@ -161,10 +159,8 @@ echo %green%Verifying nvdiffrast...%reset%
 echo.
 echo %green%Building FlexGEMM...%reset%
 
-pushd flexgemm
 %PYTHON_PATH% -m pip uninstall -y flex_gemm
 %PYTHON_PATH% -m pip install git+https://github.com/JeffreyXiang/FlexGEMM --no-build-isolation --no-cache-dir
-popd
 
 echo %green%FlexGEMM build finished...%reset%
 
@@ -174,10 +170,8 @@ echo %green%FlexGEMM build finished...%reset%
 echo.
 echo %green%Building CuMesh...%reset%
 
-pushd cumesh
 %PYTHON_PATH% -m pip uninstall -y cumesh
 %PYTHON_PATH% -m pip install git+https://github.com/JeffreyXiang/CuMesh --no-build-isolation --no-cache-dir
-popd
 
 echo %green%CuMesh build finished...%reset%
 
@@ -187,9 +181,9 @@ echo %green%CuMesh build finished...%reset%
 echo.
 echo %green%Building o_voxel...%reset%
 
-pushd trellis2\o-voxel
-%PYTHON_PATH% -m pip uninstall -y o_voxel
+pushd o-voxel
 git submodule update --init --recursive
+%PYTHON_PATH% -m pip uninstall -y o_voxel
 %PYTHON_PATH% setup.py install
 popd
 
