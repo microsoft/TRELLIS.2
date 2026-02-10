@@ -71,7 +71,7 @@ torch::Tensor encode_sparse_voxel_octree_cpu(
     }
 
     // Convert SVO to tensor
-    torch::Tensor svo_tensor = torch::from_blob(svo.data(), {svo.size()}, torch::kUInt8).clone();
+    torch::Tensor svo_tensor = torch::from_blob(svo.data(), {(int64_t)svo.size()}, torch::kUInt8).clone();
     return svo_tensor;
 }
 
@@ -133,6 +133,6 @@ torch::Tensor decode_sparse_voxel_octree_cpu(
     // Decode SVO into list of codes
     decode_sparse_voxel_octree_cpu_recursive(octree_data, depth, ptr, stack, codes);
     // Convert codes to tensor
-    torch::Tensor codes_tensor = torch::from_blob(codes.data(), {codes.size()}, torch::kInt32).clone();
+    torch::Tensor codes_tensor = torch::from_blob(codes.data(), {(int64_t)codes.size()}, torch::kInt32).clone();
     return codes_tensor;
 }
