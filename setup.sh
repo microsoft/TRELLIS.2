@@ -1,3 +1,8 @@
+#!/bin/bash
+# exit on error function
+die() {
+    echo "ERROR: $1" >&2; exit 1
+}
 # Read Arguments
 TEMP=`getopt -o h --long help,new-env,basic,flash-attn,cumesh,o-voxel,flexgemm,nvdiffrast,nvdiffrec -n 'setup.sh' -- "$@"`
 
@@ -62,31 +67,104 @@ if command -v nvidia-smi > /dev/null; then
 elif command -v rocminfo > /dev/null; then
     PLATFORM="hip"
 else
-    echo "Error: No supported GPU found"
-    exit 1
+    die "Error: No supported GPU found"
 fi
 
-if [ "$NEW_ENV" = true ] ; then
-    conda create -n trellis2 python=3.10
-    conda activate trellis2
-    if [ "$PLATFORM" = "cuda" ] ; then
-        pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
-    elif [ "$PLATFORM" = "hip" ] ; then
-        pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/rocm6.2.4
+# Source conda if installed
+try_activate_conda() {
+    # 1. is conda in $PATH?, 2. is it installed?, 3. source conda
+    local CONDA_SEARCH_PATHS=("/opt/conda" "$HOME/miniconda3" "$HOME/anaconda3" "$HOME/mambaforge" "$HOME/conda")
+    local BASE=""
+    if command -v conda >/dev/null 2>&1; then
+        BASE=$(conda info --base 2>/dev/null)
+    else
+        for p in "${CONDA_SEARCH_PATHS[@]}"; do
+            [[ -f "$p/etc/profile.d/mamba.sh" || -f "$p/etc/profile.d/conda.sh" ]] && { BASE="$p"; break; }
+        done
     fi
+    [[ -z "$BASE" ]] && return 1 # conda not found
+
+    # source both conda and mamba if available
+    [[ -f "$BASE/etc/profile.d/conda.sh" ]] && source "$BASE/etc/profile.d/conda.sh"
+    [[ -f "$BASE/etc/profile.d/mamba.sh" ]] && source "$BASE/etc/profile.d/mamba.sh"
+    
+    CURRENT="${CONDA_DEFAULT_ENV:-$(conda info --envs 2>/dev/null | grep '\*' | awk '{print $1}' | head -1)}" && CURRENT="${CURRENT:-none}"
+    [[ -z ${CURRENT} || ${CURRENT} == "base" ]] && return 2 # do not install in conda base
+
+    return 0
+}
+
+WITH_CONDA=""
+try_activate_conda
+case $? in
+    0) WITH_CONDA=true ;;
+    1) [[ "$NEW_ENV" = true ]] && die "No Conda found, cannot create environment" ;;
+    2) [[ ! "$NEW_ENV" = true ]] && echo "Conda found but cannot be used on 'base', WITH_CONDA=false" ;;
+esac
+# prefer mamba defaulting to conda
+conda() { command -v mamba >/dev/null 2>&1 && { mamba "$@"; return; }; command conda "$@"; }
+
+if [ "$NEW_ENV" = true ] ; then
+    WITH_CONDA=true
+    CONDA_ENV="trellis2"
+    conda create -n "$CONDA_ENV" python=3.10 -y
+    conda activate "$CONDA_ENV"
+    CURRENT="${CONDA_DEFAULT_ENV:-$(conda info --envs 2>/dev/null | grep '\*' | awk '{print $1}' | head -1)}" && CURRENT="${CURRENT:-none}"
+    [[ "$CURRENT" != "$CONDA_ENV" ]] && die "Error: Current conda environment $CURRENT is not $CONDA_ENV"
 fi
+
+# Get CUDA information
+if [ "$PLATFORM" = "cuda" ] ; then  # nvdiffrast, cumesh, flexgmm, ovoxel require compiling on torch cuda version
+    CUDA_EXPECT=12.4    # adjust to match torch
+    CUDA_VERSION=$(nvcc --version -v | grep "release" | awk '{print $5}' | cut -d',' -f1)
+    if [ "$CUDA_VERSION" != "$CUDA_EXPECT" ]; then
+        if [ $WITH_CONDA ] ; then
+            # if incompatible cuda version, but using conda, installs on environment and symlinks paths, reference solution from: 
+            # https://github.com/nv-tlabs/cosmos-transfer1-diffusion-renderer/blob/main/cosmos-predict1.yaml
+            # https://github.com/nv-tlabs/cosmos-transfer1-diffusion-renderer/blob/main/Dockerfile
+            echo "Installing CUDA version ${CUDA_EXPECT} on conda environemnt ${CONDA_ENV}. Machine has version ${CUDA_VERSION}."
+            conda install -y cmake gcc=${CUDA_EXPECT} gxx=${CUDA_EXPECT} cuda=${CUDA_EXPECT} cuda-nvcc=${CUDA_EXPECT} cuda-toolkit=${CUDA_EXPECT}
+            CUDA_HOME=${CONDA_PREFIX}
+            ln -sf ${CONDA_PREFIX}/lib/python3.10/site-packages/nvidia/*/include/* ${CONDA_PREFIX}/include/
+            ln -sf ${CONDA_PREFIX}/lib/python3.10/site-packages/nvidia/*/include/* ${CONDA_PREFIX}/include/python3.10
+            ln -sf ${CONDA_PREFIX}/lib/python3.10/site-packages/triton/backends/nvidia/include/* ${CONDA_PREFIX}/include/
+        else
+            die "Cuda version found, $CUDA_VERSION != expected version, $CUDA_EXPECT. Reinstall or use conda." 
+        fi
+    fi
+    pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+elif [ "$PLATFORM" = "hip" ] ; then
+    pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/rocm6.2.4
+fi
+
+install_pillow_simd() {
+    # avoid multiple pillow installs and crosslinked libraries
+    if [ $WITH_CONDA ]; then
+        conda uninstall -y --force jpeg libtiff
+        conda install -y -c conda-forge libjpeg-turbo zlib gxx_linux-64 --no-deps
+    elif [[ -z $(dpkg -l | grep libjpeg-dev) ]]; then
+        echo "Installing libjpeg-dev, may require sudo password"
+        sudo apt install -y libjpeg-dev
+    fi
+    pip install --upgrade pip setuptools wheel
+    pip uninstall -y pillow
+
+    CFLAGS="${CFLAGS} -mavx2" pip install --upgrade --no-cache-dir --force-reinstall --no-binary :all: --compile pillow-simd
+    [[ $WITH_CONDA ]] && conda install -y jpeg libtiff
+}
 
 if [ "$BASIC" = true ] ; then
     pip install imageio imageio-ffmpeg tqdm easydict opencv-python-headless ninja trimesh transformers gradio==6.0.1 tensorboard pandas lpips zstandard
     pip install git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
-    sudo apt install -y libjpeg-dev
-    pip install pillow-simd
+    install_pillow_simd
     pip install kornia timm
 fi
 
 if [ "$FLASHATTN" = true ] ; then
     if [ "$PLATFORM" = "cuda" ] ; then
-        pip install flash-attn==2.7.3
+        # bypass flash-attn error https://github.com/Dao-AILab/flash-attention/issues/246 No Module Named 'torch'
+        pip install psutil
+        pip install flash-attn==2.7.3 --no-build-isolation --no-cache-dir
     elif [ "$PLATFORM" = "hip" ] ; then
         echo "[FLASHATTN] Prebuilt binaries not found. Building from source..."
         mkdir -p /tmp/extensions
