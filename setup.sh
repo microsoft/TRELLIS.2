@@ -1,8 +1,9 @@
 #!/bin/bash
-# exit on error function
-die() {
+
+die() { # exit on error
     echo "ERROR: $1" >&2; exit 1
 }
+
 # Read Arguments
 TEMP=`getopt -o h --long help,new-env,basic,flash-attn,cumesh,o-voxel,flexgemm,nvdiffrast,nvdiffrec -n 'setup.sh' -- "$@"`
 
@@ -99,9 +100,10 @@ try_activate_conda
 case $? in
     0) WITH_CONDA=true ;;
     1) [[ "$NEW_ENV" = true ]] && die "No Conda found, cannot create environment" ;;
-    2) [[ ! "$NEW_ENV" = true ]] && echo "Conda found but cannot be used on 'base', WITH_CONDA=false" ;;
+    2) [[ ! "$NEW_ENV" = true ]] && die "Conda found, current env: base, pass --new-env or switch to named env" ;;
 esac
-# prefer mamba defaulting to conda
+
+# prefer mamba, default to conda
 conda() { command -v mamba >/dev/null 2>&1 && { mamba "$@"; return; }; command conda "$@"; }
 
 if [ "$NEW_ENV" = true ] ; then
