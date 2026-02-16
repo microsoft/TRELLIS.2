@@ -12,6 +12,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', type=str, required=True,
                         help='Directory to save the metadata')
+    parser.add_argument('--output_dir', type=str, default=None,   
+                        help='Directory to save the metadata')
     parser.add_argument('--download_root', type=str, default=None,
                         help='Directory to download the objects')
     parser.add_argument('--filter_low_aesthetic_score', type=float, default=None,
@@ -25,6 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('--world_size', type=int, default=1)
     opt = parser.parse_args(sys.argv[2:])
     opt = edict(vars(opt))
+    opt.output_dir = opt.output_dir or opt.root
     opt.download_root = opt.download_root or opt.root
 
     os.makedirs(opt.root, exist_ok=True)

@@ -38,6 +38,19 @@ if __name__ == '__main__':
     if os.path.exists(os.path.join(opt.pbr_dump_root, 'pbr_dumps', 'metadata.csv')):
         metadata = metadata.combine_first(pd.read_csv(os.path.join(opt.pbr_dump_root, 'pbr_dumps', 'metadata.csv')).set_index('sha256'))
     metadata = metadata.reset_index()
+    if 'mesh_dumped' not in metadata.columns:
+        metadata['mesh_dumped'] = False 
+        dump_path = os.path.join(opt.mesh_dump_root, 'mesh_dumps')
+        if os.path.exists(dump_path):
+            dumped_files = [f.replace('.pickle', '') for f in os.listdir(dump_path) if f.endswith('.pickle')]
+            metadata.loc[metadata['sha256'].isin(dumped_files), 'mesh_dumped'] = True
+            
+    if 'pbr_dumped' not in metadata.columns:
+        metadata['pbr_dumped'] = False
+        dump_path = os.path.join(opt.pbr_dump_root, 'pbr_dumps')
+        if os.path.exists(dump_path):
+            dumped_files = [f.replace('.pickle', '') for f in os.listdir(dump_path) if f.endswith('.pickle')]
+            metadata.loc[metadata['sha256'].isin(dumped_files), 'pbr_dumped'] = True
     if opt.instances is None:
         if 'num_faces' in metadata.columns:
             metadata = metadata[metadata['num_faces'].isnull()]
