@@ -34,7 +34,7 @@ def _pbr_voxelize(file, metadatum, pbr_dump_root, root):
 
             # process if necessary
             if need_process:
-                if dump == None:
+                if dump is None:
                     with open(os.path.join(pbr_dump_root, 'pbr_dumps', f'{sha256}.pickle'), 'rb') as f:
                         dump = pickle.load(f)
                     # Fix dump alpha map
