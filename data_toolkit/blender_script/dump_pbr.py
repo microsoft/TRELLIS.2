@@ -412,7 +412,7 @@ def main(arg):
                     pack["roughnessTexture"] = image
 
             output['materials'].append(pack)
-        except:
+        except Exception:
             with open(arg.output_path + '_error.txt', 'w') as f:
                 f.write(str([[n.name] for n in mat.node_tree.nodes]))
             raise RuntimeError("Material is not supported")

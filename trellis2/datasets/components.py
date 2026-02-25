@@ -25,7 +25,7 @@ class StandardDatasetBase(Dataset):
         try:
             self.roots = json.loads(roots)
             root_type = 'obj'
-        except:
+        except Exception:
             self.roots = roots.split(',')
             root_type = 'list'
         self.instances = []

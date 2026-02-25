@@ -203,7 +203,7 @@ class VarLenTensor:
             try:
                 other = torch.broadcast_to(other, self.shape)
                 other = other[self.batch_boardcast_map]
-            except:
+            except Exception:
                 pass
         if isinstance(other, VarLenTensor):
             other = other.feats
@@ -719,7 +719,7 @@ class SparseTensor(VarLenTensor):
             try:
                 other = torch.broadcast_to(other, self.shape)
                 other = other[self.batch_boardcast_map]
-            except:
+            except Exception:
                 pass
         if isinstance(other, VarLenTensor):
             other = other.feats
