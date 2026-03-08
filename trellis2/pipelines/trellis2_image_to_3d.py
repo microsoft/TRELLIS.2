@@ -205,7 +205,7 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         flow_model = self.models['sparse_structure_flow_model']
         reso = flow_model.resolution
         in_channels = flow_model.in_channels
-        noise = torch.randn(num_samples, in_channels, reso, reso, reso).to(self.device)
+        noise = torch.randn(num_samples, in_channels, reso, reso, reso).to(device=self.device, dtype=flow_model.dtype)
         sampler_params = {**self.sparse_structure_sampler_params, **sampler_params}
         if self.low_vram:
             flow_model.to(self.device)
@@ -251,7 +251,7 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         """
         # Sample structured latent
         noise = SparseTensor(
-            feats=torch.randn(coords.shape[0], flow_model.in_channels).to(self.device),
+            feats=torch.randn(coords.shape[0], flow_model.in_channels).to(device=self.device, dtype=flow_model.dtype),
             coords=coords,
         )
         sampler_params = {**self.shape_slat_sampler_params, **sampler_params}
@@ -268,12 +268,12 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         if self.low_vram:
             flow_model.cpu()
 
-        std = torch.tensor(self.shape_slat_normalization['std'])[None].to(slat.device)
-        mean = torch.tensor(self.shape_slat_normalization['mean'])[None].to(slat.device)
+        std = torch.tensor(self.shape_slat_normalization['std'])[None].to(device=slat.device, dtype=slat.dtype)
+        mean = torch.tensor(self.shape_slat_normalization['mean'])[None].to(device=slat.device, dtype=slat.dtype)
         slat = slat * std + mean
-        
+
         return slat
-    
+
     def sample_shape_slat_cascade(
         self,
         lr_cond: dict,
@@ -296,7 +296,7 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         """
         # LR
         noise = SparseTensor(
-            feats=torch.randn(coords.shape[0], flow_model_lr.in_channels).to(self.device),
+            feats=torch.randn(coords.shape[0], flow_model_lr.in_channels).to(device=self.device, dtype=flow_model_lr.dtype),
             coords=coords,
         )
         sampler_params = {**self.shape_slat_sampler_params, **sampler_params}
@@ -312,8 +312,8 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         ).samples
         if self.low_vram:
             flow_model_lr.cpu()
-        std = torch.tensor(self.shape_slat_normalization['std'])[None].to(slat.device)
-        mean = torch.tensor(self.shape_slat_normalization['mean'])[None].to(slat.device)
+        std = torch.tensor(self.shape_slat_normalization['std'])[None].to(device=slat.device, dtype=slat.dtype)
+        mean = torch.tensor(self.shape_slat_normalization['mean'])[None].to(device=slat.device, dtype=slat.dtype)
         slat = slat * std + mean
         
         # Upsample
@@ -340,7 +340,7 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         
         # Sample structured latent
         noise = SparseTensor(
-            feats=torch.randn(coords.shape[0], flow_model.in_channels).to(self.device),
+            feats=torch.randn(coords.shape[0], flow_model.in_channels).to(device=self.device, dtype=flow_model.dtype),
             coords=coords,
         )
         sampler_params = {**self.shape_slat_sampler_params, **sampler_params}
@@ -357,10 +357,10 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         if self.low_vram:
             flow_model.cpu()
 
-        std = torch.tensor(self.shape_slat_normalization['std'])[None].to(slat.device)
-        mean = torch.tensor(self.shape_slat_normalization['mean'])[None].to(slat.device)
+        std = torch.tensor(self.shape_slat_normalization['std'])[None].to(device=slat.device, dtype=slat.dtype)
+        mean = torch.tensor(self.shape_slat_normalization['mean'])[None].to(device=slat.device, dtype=slat.dtype)
         slat = slat * std + mean
-        
+
         return slat, hr_resolution
 
     def decode_shape_slat(
@@ -404,12 +404,12 @@ class Trellis2ImageTo3DPipeline(Pipeline):
             sampler_params (dict): Additional parameters for the sampler.
         """
         # Sample structured latent
-        std = torch.tensor(self.shape_slat_normalization['std'])[None].to(shape_slat.device)
-        mean = torch.tensor(self.shape_slat_normalization['mean'])[None].to(shape_slat.device)
+        std = torch.tensor(self.shape_slat_normalization['std'])[None].to(device=shape_slat.device, dtype=shape_slat.dtype)
+        mean = torch.tensor(self.shape_slat_normalization['mean'])[None].to(device=shape_slat.device, dtype=shape_slat.dtype)
         shape_slat = (shape_slat - mean) / std
 
         in_channels = flow_model.in_channels if isinstance(flow_model, nn.Module) else flow_model[0].in_channels
-        noise = shape_slat.replace(feats=torch.randn(shape_slat.coords.shape[0], in_channels - shape_slat.feats.shape[1]).to(self.device))
+        noise = shape_slat.replace(feats=torch.randn(shape_slat.coords.shape[0], in_channels - shape_slat.feats.shape[1]).to(device=self.device, dtype=shape_slat.dtype))
         sampler_params = {**self.tex_slat_sampler_params, **sampler_params}
         if self.low_vram:
             flow_model.to(self.device)
@@ -425,8 +425,8 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         if self.low_vram:
             flow_model.cpu()
 
-        std = torch.tensor(self.tex_slat_normalization['std'])[None].to(slat.device)
-        mean = torch.tensor(self.tex_slat_normalization['mean'])[None].to(slat.device)
+        std = torch.tensor(self.tex_slat_normalization['std'])[None].to(device=slat.device, dtype=slat.dtype)
+        mean = torch.tensor(self.tex_slat_normalization['mean'])[None].to(device=slat.device, dtype=slat.dtype)
         slat = slat * std + mean
         
         return slat
