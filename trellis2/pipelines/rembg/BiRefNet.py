@@ -7,10 +7,9 @@ from PIL import Image
 
 class BiRefNet:
     def __init__(self, model_name: str = "ZhengPeng7/BiRefNet"):
-        with torch.device("cpu"):
-            self.model = AutoModelForImageSegmentation.from_pretrained(
-                model_name, trust_remote_code=True, low_cpu_mem_usage=False
-            )
+        self.model = AutoModelForImageSegmentation.from_pretrained(
+            model_name, trust_remote_code=True, low_cpu_mem_usage=False
+        )
         self.model.eval()
         self.transform_image = transforms.Compose(
             [
