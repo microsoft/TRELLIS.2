@@ -26,6 +26,13 @@ except ImportError:
 TRELLIS_REPO = "microsoft/TRELLIS.2-4B"
 RMBG_REPO = "briaai/RMBG-2.0"
 DINO_REPO = "facebook/dinov3-vitl16-pretrain-lvd1689m"
+DINO_DIRECT_FILENAME = "dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth"
+DINO_DIRECT_URL = (
+    "https://dinov3.llamameta.net/dinov3_vitl16/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth"
+    "?Policy=eyJTdGF0ZW1lbnQiOlt7InVuaXF1ZV9oYXNoIjoiYTdwYzV6YzI3bDczbmJxcjNhZXAyYnhkIiwiUmVzb3VyY2UiOiJodHRwczpcL1wvZGlub3YzLmxsYW1hbWV0YS5uZXRcLyoiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3NzQ0MTgxMDl9fX1dfQ__"
+    "&Signature=qIEnfQZHBmwdp38IDvUjV3wkZMiNX3v9-K-YXheXCFRo97GBhwNHG-PbJkb1Fw9PECXYcklow%7EiJ%7EV3Qh8TfytTe2t%7ElcNs63kCoxmRuBB8%7ElUXD5R%7E0nKX1HqqZQzxV%7ECXUcDh6wKWX5dcEeMG39bVjOAhADvItOLCPQU-l%7ECP9NM2Nb9sXi2Eyp21gU5PNAL11ziKY2U4dRuKvjDn9EhfGS1cvftO8AFGsIOEapmWbEZ9lpWgEGFWiWbt6ajy%7EnK6NoiycLatTTNF-hFCmSiD6xavV7MfgtXHmFi8SE7Vvrv%7EwAjGuA0ZFOQnUNSCbVzyQ8Rj-S8PA1OGp28svxA__"
+    "&Key-Pair-Id=K15QRJLYKIFSLZ&Download-Request-ID=3857627804367069"
+)
 
 TRELLIS_TEXTURE_FILES = [
     "texturing_pipeline.json",
@@ -73,29 +80,15 @@ def download_rmbg(local_dir: Path, token: str = None):
 
 
 def download_dino(local_dir: Path, token: str = None):
-    print(f"\n[3/3] Downloading DINOv3-L -> {local_dir}")
-    if any(local_dir.glob("*.safetensors")) or any(local_dir.glob("*.bin")):
-        print("  skip  (already exists)")
+    print(f"\n[3/3] Downloading DINOv3-L ({DINO_DIRECT_FILENAME}) -> {local_dir}")
+    local_dir.mkdir(parents=True, exist_ok=True)
+    dest = local_dir / DINO_DIRECT_FILENAME
+    if dest.exists():
+        print(f"  skip  {DINO_DIRECT_FILENAME} (already exists)")
         return
-    try:
-        snapshot_download(
-            repo_id=DINO_REPO,
-            local_dir=str(local_dir),
-            token=token,
-            ignore_patterns=["*.md", "*.txt"],
-        )
-    except Exception as e:
-        if "gated" in str(e).lower() or "403" in str(e):
-            raise SystemExit(
-                f"\nERROR: {DINO_REPO} is a gated repository.\n"
-                f"  1. Log in to HuggingFace and visit:\n"
-                f"     https://huggingface.co/{DINO_REPO}\n"
-                f"  2. Click 'Request access' and wait for approval.\n"
-                f"  3. Generate a token at https://huggingface.co/settings/tokens\n"
-                f"  4. Re-run with: python download_texture_models.py --token <your_token>\n"
-                f"     or set:       set HF_TOKEN=<your_token>\n"
-            )
-        raise
+    import urllib.request
+    print(f"  fetch {DINO_DIRECT_FILENAME} ...")
+    urllib.request.urlretrieve(DINO_DIRECT_URL, str(dest))
     print("  done.")
 
 
