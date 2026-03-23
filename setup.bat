@@ -55,27 +55,28 @@ if %HELP%==1 (
 )
 
 :: ---- Detect GPU platform ----------------------------------------
-set PLATFORM=
+set GPU_PLATFORM=
 nvidia-smi >nul 2>&1
 if %errorlevel%==0 (
-    set PLATFORM=cuda
+    set GPU_PLATFORM=cuda
 ) else (
     rocminfo >nul 2>&1
     if !errorlevel!==0 (
-        set PLATFORM=hip
+        set GPU_PLATFORM=hip
     )
 )
 
-if "%PLATFORM%"=="" (
+if "%GPU_PLATFORM%"=="" (
     echo Error: No supported GPU found ^(nvidia-smi and rocminfo both failed^)
     exit /b 1
 )
-echo Detected platform: %PLATFORM%
+echo Detected platform: %GPU_PLATFORM%
 
 set WORKDIR=%CD%
 set EXT_DIR=%TEMP%\trellis2_extensions
 
 :: ---- Activate MSVC environment (needed for CUDA extension builds) ----
+:: NOTE: vcvarsall.bat sets PLATFORM=x64, so we use GPU_PLATFORM instead
 set VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"
 if exist %VCVARS% (
     call %VCVARS% x64
@@ -89,9 +90,9 @@ if exist %VCVARS% (
 if %NEW_ENV%==1 (
     python -m venv "%WORKDIR%\.venv"
     call "%WORKDIR%\.venv\Scripts\activate.bat"
-    if "%PLATFORM%"=="cuda" (
+    if "%GPU_PLATFORM%"=="cuda" (
         pip install torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128 --no-build-isolation
-    ) else if "%PLATFORM%"=="hip" (
+    ) else if "%GPU_PLATFORM%"=="hip" (
         pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/rocm6.2.4 --no-build-isolation
     )
 )
@@ -107,7 +108,7 @@ if %BASIC%==1 (
 
 :: ---- --flash-attn -----------------------------------------------
 if %FLASHATTN%==1 (
-    if "%PLATFORM%"=="cuda" (
+    if "%GPU_PLATFORM%"=="cuda" (
         pip install https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.4.10/flash_attn-2.8.2+cu128torch2.7-cp312-cp312-win_amd64.whl --no-build-isolation
     ) else (
         echo [FLASHATTN] Unsupported platform on Windows: %PLATFORM%
@@ -116,7 +117,7 @@ if %FLASHATTN%==1 (
 
 :: ---- --nvdiffrast -----------------------------------------------
 if %NVDIFFRAST%==1 (
-    if "%PLATFORM%"=="cuda" (
+    if "%GPU_PLATFORM%"=="cuda" (
         mkdir "%EXT_DIR%" 2>nul
         git clone -b v0.4.0 https://github.com/NVlabs/nvdiffrast.git "%EXT_DIR%\nvdiffrast"
         pip install "%EXT_DIR%\nvdiffrast" --no-build-isolation
@@ -127,7 +128,7 @@ if %NVDIFFRAST%==1 (
 
 :: ---- --nvdiffrec ------------------------------------------------
 if %NVDIFFREC%==1 (
-    if "%PLATFORM%"=="cuda" (
+    if "%GPU_PLATFORM%"=="cuda" (
         mkdir "%EXT_DIR%" 2>nul
         git clone -b renderutils https://github.com/JeffreyXiang/nvdiffrec.git "%EXT_DIR%\nvdiffrec"
         pip install "%EXT_DIR%\nvdiffrec" --no-build-isolation

@@ -77,12 +77,25 @@ def download_dino(local_dir: Path, token: str = None):
     if any(local_dir.glob("*.safetensors")) or any(local_dir.glob("*.bin")):
         print("  skip  (already exists)")
         return
-    snapshot_download(
-        repo_id=DINO_REPO,
-        local_dir=str(local_dir),
-        token=token,
-        ignore_patterns=["*.md", "*.txt"],
-    )
+    try:
+        snapshot_download(
+            repo_id=DINO_REPO,
+            local_dir=str(local_dir),
+            token=token,
+            ignore_patterns=["*.md", "*.txt"],
+        )
+    except Exception as e:
+        if "gated" in str(e).lower() or "403" in str(e):
+            raise SystemExit(
+                f"\nERROR: {DINO_REPO} is a gated repository.\n"
+                f"  1. Log in to HuggingFace and visit:\n"
+                f"     https://huggingface.co/{DINO_REPO}\n"
+                f"  2. Click 'Request access' and wait for approval.\n"
+                f"  3. Generate a token at https://huggingface.co/settings/tokens\n"
+                f"  4. Re-run with: python download_texture_models.py --token <your_token>\n"
+                f"     or set:       set HF_TOKEN=<your_token>\n"
+            )
+        raise
     print("  done.")
 
 

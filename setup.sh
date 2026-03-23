@@ -1,5 +1,5 @@
 # Read Arguments
-TEMP=`getopt -o h --long help,new-env,basic,flash-attn,cumesh,o-voxel,flexgemm,nvdiffrast,nvdiffrec -n 'setup.sh' -- "$@"`
+TEMP=`getopt -o h --long help,new-env,basic,flash-attn,cumesh,o-voxel,flexgemm,nvdiffrast,nvdiffrec,texture,all -n 'setup.sh' -- "$@"`
 
 eval set -- "$TEMP"
 
@@ -30,6 +30,8 @@ while true ; do
         --flexgemm) FLEXGEMM=true ; shift ;;
         --nvdiffrast) NVDIFFRAST=true ; shift ;;
         --nvdiffrec) NVDIFFREC=true ; shift ;;
+        --texture) BASIC=true ; FLASHATTN=true ; OVOXEL=true ; CUMESH=true ; FLEXGEMM=true ; NVDIFFRAST=true ; shift ;;
+        --all) NEW_ENV=true ; BASIC=true ; FLASHATTN=true ; CUMESH=true ; OVOXEL=true ; FLEXGEMM=true ; NVDIFFRAST=true ; NVDIFFREC=true ; shift ;;
         --) shift ; break ;;
         *) ERROR=true ; break ;;
     esac
@@ -52,7 +54,9 @@ if [ "$HELP" = true ] ; then
     echo "  --flexgemm              Install flexgemm"
     echo "  --nvdiffrast            Install nvdiffrast"
     echo "  --nvdiffrec             Install nvdiffrec"
-    return
+    echo "  --texture               Install all dependencies for texturing (basic, flash-attn, o-voxel, cumesh, flexgemm, nvdiffrast)"
+    echo "  --all                   Run all of the above"
+    exit 0
 fi
 
 # Get system information
@@ -67,10 +71,15 @@ else
 fi
 
 if [ "$NEW_ENV" = true ] ; then
-    conda create -n trellis2 python=3.10
-    conda activate trellis2
+    if command -v conda > /dev/null; then
+        conda create -n trellis2 python=3.10
+        conda activate trellis2
+    else
+        python3 -m venv "$WORKDIR/.venv"
+        source "$WORKDIR/.venv/bin/activate"
+    fi
     if [ "$PLATFORM" = "cuda" ] ; then
-        pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+        pip install torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
     elif [ "$PLATFORM" = "hip" ] ; then
         pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/rocm6.2.4
     fi
