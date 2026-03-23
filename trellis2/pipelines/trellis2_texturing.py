@@ -313,7 +313,10 @@ class Trellis2TexturingPipeline(Pipeline):
             normals = normals[vmap.cpu().numpy()]
                 
         # rasterize
-        ctx = dr.RasterizeCudaContext()
+        try:
+            ctx = dr.RasterizeCudaContext()
+        except RuntimeError:
+            ctx = dr.RasterizeGLContext()
         uvs_torch = torch.cat([uvs_torch * 2 - 1, torch.zeros_like(uvs_torch[:, :1]), torch.ones_like(uvs_torch[:, :1])], dim=-1).unsqueeze(0)
         rast, _ = dr.rasterize(
             ctx, uvs_torch, faces_torch,
