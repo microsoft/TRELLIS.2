@@ -177,8 +177,12 @@ if [ "$OVOXEL" = true ] ; then
     cp -r o-voxel /tmp/extensions/o-voxel
     echo "[O-VOXEL] Fixing dependencies to avoid git reinstall..."
     cd /tmp/extensions/o-voxel
-    sed -i 's|cumesh @ git+https://github.com/JeffreyXiang/CuMesh.git|"cumesh"|' pyproject.toml
-    sed -i 's|flex_gemm @ git+https://github.com/JeffreyXiang/FlexGEMM.git|"flex_gemm"|' pyproject.toml
+    # The git refs in pyproject.toml live inside a quoted TOML dependencies
+    # array (e.g. "cumesh @ git+https://..."). Replace only the inner ref so
+    # the surrounding quotes are preserved — otherwise we produce ""cumesh""
+    # and pip rejects pyproject.toml with "Unclosed array".
+    sed -i 's|cumesh @ git+https://github.com/JeffreyXiang/CuMesh.git|cumesh|' pyproject.toml
+    sed -i 's|flex_gemm @ git+https://github.com/JeffreyXiang/FlexGEMM.git|flex_gemm|' pyproject.toml
     cd $WORKDIR
     pip install /tmp/extensions/o-voxel --no-build-isolation
 fi
