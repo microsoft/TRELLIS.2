@@ -106,7 +106,14 @@ fi
 
 if [ "$FLASHATTN" = true ] ; then
     if [ "$PLATFORM" = "cuda" ] ; then
-        pip install flash-attn==2.7.3 --no-build-isolation
+        # flash-attn 2.7.3 has no prebuilt wheel for torch 2.7 (only 2.1-2.6 + 2.8),
+        # and source builds against torch 2.7+cu128 fail in modern setuptools.
+        # 2.8.3 ships an exact torch2.7+cu12 wheel and is a drop-in replacement
+        # for the API surfaces TRELLIS.2 uses (varlen / dense attention).
+        FA_VER="2.8.3"
+        FA_PY=$(python -c 'import sys;print(f"cp{sys.version_info.major}{sys.version_info.minor}")')
+        FA_WHL="https://github.com/Dao-AILab/flash-attention/releases/download/v${FA_VER}/flash_attn-${FA_VER}+cu12torch2.7cxx11abiFALSE-${FA_PY}-${FA_PY}-linux_x86_64.whl"
+        pip install --no-cache-dir "$FA_WHL"
     elif [ "$PLATFORM" = "hip" ] ; then
         echo "[FLASHATTN] Prebuilt binaries not found. Building from source..."
         mkdir -p /tmp/extensions
