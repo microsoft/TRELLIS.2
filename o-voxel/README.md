@@ -18,7 +18,7 @@ This library provides an efficient implementation for the instant bidirectional 
 
 ```bash
 git clone -b main https://github.com/microsoft/TRELLIS.2.git --recursive
-pip install TRELLIS.2/o_voxel --no-build-isolation
+pip install TRELLIS.2/o-voxel --no-build-isolation
 ```
 
 ## Quick Start
