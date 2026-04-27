@@ -1,6 +1,10 @@
 #include <cstdint>
 
+#ifdef __HIP_PLATFORM_AMD__
+#include <hip/hip_runtime.h>
+#else
 #include <cuda.h>
+#endif
 #include "cuda_runtime.h"
 
 #include <cooperative_groups.h>
