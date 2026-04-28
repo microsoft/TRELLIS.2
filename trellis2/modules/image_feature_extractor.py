@@ -83,7 +83,11 @@ class DinoV3FeatureExtractor:
         hidden_states = self.model.embeddings(image, bool_masked_pos=None)
         position_embeddings = self.model.rope_embeddings(image)
 
-        for i, layer_module in enumerate(self.model.layer):
+        # transformers >=5 wraps the DINOv3 encoder under .model (so .layer is at
+        # self.model.model.layer); older versions exposed .layer directly on the
+        # top-level model. Pick whichever exists.
+        encoder = getattr(self.model, "model", self.model)
+        for i, layer_module in enumerate(encoder.layer):
             hidden_states = layer_module(
                 hidden_states,
                 position_embeddings=position_embeddings,
