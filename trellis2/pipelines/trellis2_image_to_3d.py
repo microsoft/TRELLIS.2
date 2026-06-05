@@ -484,7 +484,90 @@ class Trellis2ImageTo3DPipeline(Pipeline):
                 )
             )
         return out_mesh
-    
+
+    def inject_sampler_multi_image(
+        self,
+        sampler_name: str,
+        num_images: int,
+        num_steps: int,
+        mode: Literal['stochastic', 'multidiffusion'] = 'stochastic',
+    ):
+        """
+        Inject a sampler with multiple images as condition.
+        This is a context manager that temporarily modifies the sampler's inference behavior
+        to handle multiple image conditioning.
+
+        Args:
+            sampler_name (str): The name of the sampler to inject ('sparse_structure_sampler',
+                'shape_slat_sampler', or 'tex_slat_sampler').
+            num_images (int): The number of images to condition on.
+            num_steps (int): The number of steps to run the sampler for.
+            mode (str): The fusion mode for multi-image conditioning.
+                - 'stochastic': Cycle through images sequentially at each step (memory efficient)
+                - 'multidiffusion': Average predictions from all images at each step (higher quality)
+        """
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _inject():
+            sampler = getattr(self, sampler_name)
+            setattr(sampler, f'_old_inference_model', sampler._inference_model)
+
+            if mode == 'stochastic':
+                if num_images > num_steps:
+                    print(f"\033[93mWarning: number of conditioning images is greater than number of steps for {sampler_name}. "
+                        "This may lead to performance degradation.\033[0m")
+
+                # Use a counter that cycles infinitely instead of a pre-created list
+                counter = {'value': 0}
+                def _new_inference_model(self, model, x_t, t, cond, **kwargs):
+                    cond_idx = counter['value'] % num_images
+                    counter['value'] += 1
+                    cond_i = cond[cond_idx:cond_idx+1]
+                    return self._old_inference_model(model, x_t, t, cond=cond_i, **kwargs)
+
+            elif mode == 'multidiffusion':
+                from .samplers import FlowEulerSampler
+                def _new_inference_model(self, model, x_t, t, cond, neg_cond, guidance_strength, guidance_interval, guidance_rescale=0.0, **kwargs):
+                    if guidance_interval[0] <= t <= guidance_interval[1]:
+                        preds = []
+                        for i in range(len(cond)):
+                            preds.append(FlowEulerSampler._inference_model(self, model, x_t, t, cond[i:i+1], **kwargs))
+                        pred = sum(preds) / len(preds)
+                        neg_pred = FlowEulerSampler._inference_model(self, model, x_t, t, neg_cond, **kwargs)
+
+                        # Apply CFG with optional rescaling
+                        pred_cfg = guidance_strength * pred + (1 - guidance_strength) * neg_pred
+
+                        if guidance_rescale > 0:
+                            x_0_pos = self._pred_to_xstart(x_t, t, pred)
+                            x_0_cfg = self._pred_to_xstart(x_t, t, pred_cfg)
+                            std_pos = x_0_pos.std(dim=list(range(1, x_0_pos.ndim)), keepdim=True)
+                            std_cfg = x_0_cfg.std(dim=list(range(1, x_0_cfg.ndim)), keepdim=True)
+                            x_0_rescaled = x_0_cfg * (std_pos / std_cfg)
+                            x_0 = guidance_rescale * x_0_rescaled + (1 - guidance_rescale) * x_0_cfg
+                            pred_cfg = self._xstart_to_pred(x_t, t, x_0)
+
+                        return pred_cfg
+                    else:
+                        preds = []
+                        for i in range(len(cond)):
+                            preds.append(FlowEulerSampler._inference_model(self, model, x_t, t, cond[i:i+1], **kwargs))
+                        pred = sum(preds) / len(preds)
+                        return pred
+
+            else:
+                raise ValueError(f"Unsupported mode: {mode}")
+
+            sampler._inference_model = _new_inference_model.__get__(sampler, type(sampler))
+
+            yield
+
+            sampler._inference_model = sampler._old_inference_model
+            delattr(sampler, f'_old_inference_model')
+
+        return _inject()
+
     @torch.no_grad()
     def run(
         self,
