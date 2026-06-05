@@ -19,7 +19,7 @@ else:
 if not IS_HIP:
     cc_flag = []
 else:
-    archs = os.getenv("GPU_ARCHS", "native").split(";")
+    archs = os.getenv("GPU_ARCHS", "gfx942").split(";")
     cc_flag = [f"--offload-arch={arch}" for arch in archs]
 
 setup(
