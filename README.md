@@ -7,6 +7,7 @@
 <a href="https://huggingface.co/spaces/microsoft/TRELLIS.2"><img src="https://img.shields.io/badge/Hugging%20Face-Demo-blueviolet"></a>
 <a href="https://microsoft.github.io/TRELLIS.2"><img src="https://img.shields.io/badge/Project-Website-blue" alt="Project Page"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](http://colab.research.google.com/github/microsoft/TRELLIS.2/blob/main/example.ipynb)
 
 https://github.com/user-attachments/assets/63b43a7e-acc7-4c81-a900-6da450527d8f
 
