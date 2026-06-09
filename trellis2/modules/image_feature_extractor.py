@@ -5,6 +5,95 @@ from torchvision import transforms
 from transformers import DINOv3ViTModel
 import numpy as np
 from PIL import Image
+from pathlib import Path
+
+
+# Default location written by download_texture_models.py
+_DINOV3_DEFAULT_PTH = (
+    Path(__file__).parent.parent.parent
+    / "models"
+    / "dinov3-vitl16-pretrain-lvd1689m"
+    / "dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth"
+)
+
+
+def _find_dinov3_pth(model_name: str) -> "Path | None":
+    """Return a local .pth path for DINOv3, or None to fall back to HF."""
+    import os
+    env = os.environ.get("DINOV3_PTH_PATH")
+    if env:
+        p = Path(env)
+        if p.exists():
+            return p
+    if model_name.endswith(".pth"):
+        p = Path(model_name)
+        if p.exists():
+            return p
+    if _DINOV3_DEFAULT_PTH.exists():
+        return _DINOV3_DEFAULT_PTH
+    return None
+
+
+def _load_dinov3_from_pth(pth_path) -> "DINOv3ViTModel":
+    """Load DINOv3ViTModel from a Meta-format .pth checkpoint."""
+    from transformers import DINOv3ViTConfig
+    print(f"  [DINOv3] loading from local .pth: {pth_path}")
+    ckpt = torch.load(str(pth_path), map_location="cpu", weights_only=True)
+
+    hidden_size  = ckpt["patch_embed.proj.weight"].shape[0]
+    num_blocks   = sum(1 for k in ckpt if k.startswith("blocks.") and k.endswith(".norm1.weight"))
+    intermediate = ckpt["blocks.0.mlp.fc1.weight"].shape[0]
+    num_register = ckpt["storage_tokens"].shape[1]
+    patch_size   = ckpt["patch_embed.proj.weight"].shape[2]
+    num_heads    = hidden_size // 64  # standard ViT head_dim=64
+
+    cfg = DINOv3ViTConfig(
+        hidden_size=hidden_size,
+        num_hidden_layers=num_blocks,
+        num_attention_heads=num_heads,
+        intermediate_size=intermediate,
+        patch_size=patch_size,
+        num_register_tokens=num_register,
+        key_bias=True,
+    )
+
+    sd = {}
+    sd["embeddings.cls_token"]               = ckpt["cls_token"]
+    sd["embeddings.mask_token"]              = ckpt["mask_token"].unsqueeze(1)  # [1, D] -> [1, 1, D]
+    sd["embeddings.register_tokens"]         = ckpt["storage_tokens"]
+    sd["embeddings.patch_embeddings.weight"] = ckpt["patch_embed.proj.weight"]
+    sd["embeddings.patch_embeddings.bias"]   = ckpt["patch_embed.proj.bias"]
+
+    for i in range(num_blocks):
+        s, d = f"blocks.{i}", f"layer.{i}"
+        for sfx in ("norm1.weight", "norm1.bias", "norm2.weight", "norm2.bias"):
+            sd[f"{d}.{sfx}"] = ckpt[f"{s}.{sfx}"]
+
+        qkv_w = ckpt[f"{s}.attn.qkv.weight"]
+        qkv_b = ckpt[f"{s}.attn.qkv.bias"]
+        H = hidden_size
+        sd[f"{d}.attention.q_proj.weight"] = qkv_w[:H]
+        sd[f"{d}.attention.k_proj.weight"] = qkv_w[H:2*H]
+        sd[f"{d}.attention.v_proj.weight"] = qkv_w[2*H:]
+        sd[f"{d}.attention.q_proj.bias"]   = qkv_b[:H]
+        sd[f"{d}.attention.k_proj.bias"]   = qkv_b[H:2*H]
+        sd[f"{d}.attention.v_proj.bias"]   = qkv_b[2*H:]
+
+        sd[f"{d}.attention.o_proj.weight"] = ckpt[f"{s}.attn.proj.weight"]
+        sd[f"{d}.attention.o_proj.bias"]   = ckpt[f"{s}.attn.proj.bias"]
+        sd[f"{d}.layer_scale1.lambda1"]    = ckpt[f"{s}.ls1.gamma"]
+        sd[f"{d}.layer_scale2.lambda1"]    = ckpt[f"{s}.ls2.gamma"]
+        sd[f"{d}.mlp.up_proj.weight"]      = ckpt[f"{s}.mlp.fc1.weight"]
+        sd[f"{d}.mlp.up_proj.bias"]        = ckpt[f"{s}.mlp.fc1.bias"]
+        sd[f"{d}.mlp.down_proj.weight"]    = ckpt[f"{s}.mlp.fc2.weight"]
+        sd[f"{d}.mlp.down_proj.bias"]      = ckpt[f"{s}.mlp.fc2.bias"]
+
+    model = DINOv3ViTModel(cfg)
+    missing, unexpected = model.load_state_dict(sd, strict=False)
+    if missing:
+        print(f"  [DINOv3] {len(missing)} missing keys (e.g. {missing[0]})")
+    model.eval()
+    return model
 
 
 class DinoV2FeatureExtractor:
@@ -62,7 +151,11 @@ class DinoV3FeatureExtractor:
     """
     def __init__(self, model_name: str, image_size=512):
         self.model_name = model_name
-        self.model = DINOv3ViTModel.from_pretrained(model_name)
+        pth = _find_dinov3_pth(model_name)
+        if pth is not None:
+            self.model = _load_dinov3_from_pth(pth)
+        else:
+            self.model = DINOv3ViTModel.from_pretrained(model_name)
         self.model.eval()
         self.image_size = image_size
         self.transform = transforms.Compose([
