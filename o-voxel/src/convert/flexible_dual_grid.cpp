@@ -6,76 +6,175 @@
 
 #include "api.h"
 
-
 constexpr size_t kInvalidIndex = std::numeric_limits<size_t>::max();
 
-
-struct float3 {float x, y, z; float& operator[](int i) {return (&x)[i];}};
-struct int3 {int x, y, z; int& operator[](int i) {return (&x)[i];}};
-struct int4 {int x, y, z, w; int& operator[](int i) {return (&x)[i];}};
-struct bool3 {bool x, y, z; bool& operator[](int i) {return (&x)[i];}};
-
+struct float3
+{
+    float x, y, z;
+    float &operator[](int i) { return (&x)[i]; }
+};
+struct int3
+{
+    int x, y, z;
+    int &operator[](int i) { return (&x)[i]; }
+};
+struct int4
+{
+    int x, y, z, w;
+    int &operator[](int i) { return (&x)[i]; }
+};
+struct bool3
+{
+    bool x, y, z;
+    bool &operator[](int i) { return (&x)[i]; }
+};
 
 template <typename T, typename U>
-static inline U lerp(const T& a, const T& b, const T& t, const U& val_a, const U& val_b) {
-    if (a == b) return val_a; // Avoid divide by zero
+static inline U lerp(const T &a, const T &b, const T &t, const U &val_a, const U &val_b)
+{
+    if (a == b)
+        return val_a; // Avoid divide by zero
     T alpha = (t - a) / (b - a);
     return (1 - alpha) * val_a + alpha * val_b;
 }
 
-
 template <typename Map, typename Key, typename Default>
-static auto get_or_default(const Map& map, const Key& key, const Default& default_val) -> typename Map::mapped_type {
+static auto get_or_default(const Map &map, const Key &key, const Default &default_val) -> typename Map::mapped_type
+{
     auto it = map.find(key);
     return (it != map.end()) ? it->second : default_val;
 }
 
-
 // 3D voxel coordinate
-struct VoxelCoord {
+struct VoxelCoord
+{
     int x, y, z;
 
-    int& operator[](int i) {
+    int &operator[](int i)
+    {
         return (&x)[i];
     }
 
-    bool operator==(const VoxelCoord& other) const {
+    bool operator==(const VoxelCoord &other) const
+    {
         return x == other.x && y == other.y && z == other.z;
     }
 };
 
 // Hash function for VoxelCoord to use in unordered_map
-namespace std {
-template <>
-struct hash<VoxelCoord> {
-    size_t operator()(const VoxelCoord& v) const {
-        const std::size_t p1 = 73856093;
-        const std::size_t p2 = 19349663;
-        const std::size_t p3 = 83492791;
-        return (std::size_t)(v.x) * p1 ^ (std::size_t)(v.y) * p2 ^ (std::size_t)(v.z) * p3;
-    }
-};
+namespace std
+{
+    template <>
+    struct hash<VoxelCoord>
+    {
+        size_t operator()(const VoxelCoord &v) const
+        {
+            const std::size_t p1 = 73856093;
+            const std::size_t p2 = 19349663;
+            const std::size_t p3 = 83492791;
+            return (std::size_t)(v.x) * p1 ^ (std::size_t)(v.y) * p2 ^ (std::size_t)(v.z) * p3;
+        }
+    };
 }
 
-
-void intersect_qef(
-    const Eigen::Vector3f& voxel_size,
-    const Eigen::Vector3i& grid_min,
-    const Eigen::Vector3i& grid_max,
-    const std::vector<Eigen::Vector3f>& triangles, // 3 vertices per triangle
-    std::unordered_map<VoxelCoord, size_t>& hash_table, // Hash table for voxel lookup
-    std::vector<int3>& voxels, // Output: Voxel coordinates
-    std::vector<Eigen::Vector3f>& means, // Output: Mean vertex positions for each voxel
-    std::vector<float>& cnt, // Output: Number of intersections for each voxel
-    std::vector<bool3>& intersected, // Output: Whether edge of voxel intersects with triangle
-    std::vector<Eigen::Matrix4f>& qefs // Output: QEF matrices for each voxel
-) {
+void intersect_occ(
+    const Eigen::Vector3f &voxel_size,
+    const Eigen::Vector3i &grid_min,
+    const Eigen::Vector3i &grid_max,
+    const std::vector<Eigen::Vector3f> &triangles,
+    std::unordered_map<VoxelCoord, size_t> &hash_table,
+    std::vector<int3> &voxels)
+{
     const size_t N_tri = triangles.size() / 3;
 
-    for (size_t i = 0; i < N_tri; ++i) {
-        const Eigen::Vector3f& v0 = triangles[i * 3 + 0];
-        const Eigen::Vector3f& v1 = triangles[i * 3 + 1];
-        const Eigen::Vector3f& v2 = triangles[i * 3 + 2];
+    for (size_t i = 0; i < N_tri; ++i)
+    {
+        const Eigen::Vector3f &v0 = triangles[i * 3 + 0];
+        const Eigen::Vector3f &v1 = triangles[i * 3 + 1];
+        const Eigen::Vector3f &v2 = triangles[i * 3 + 2];
+
+        auto scan_line_fill = [&](const int ax2)
+        {
+            int ax0 = (ax2 + 1) % 3;
+            int ax1 = (ax2 + 2) % 3;
+
+            std::array<Eigen::Vector3d, 3> t = {
+                Eigen::Vector3d(v0[ax0], v0[ax1], v0[ax2]),
+                Eigen::Vector3d(v1[ax0], v1[ax1], v1[ax2]),
+                Eigen::Vector3d(v2[ax0], v2[ax1], v2[ax2])};
+            std::sort(t.begin(), t.end(), [](const Eigen::Vector3d &a, const Eigen::Vector3d &b)
+                      { return a.y() < b.y(); });
+
+            int start = std::clamp(int(t[0].y() / voxel_size[ax1]), grid_min[ax1], grid_max[ax1] - 1);
+            int mid = std::clamp(int(t[1].y() / voxel_size[ax1]), grid_min[ax1], grid_max[ax1] - 1);
+            int end = std::clamp(int(t[2].y() / voxel_size[ax1]), grid_min[ax1], grid_max[ax1] - 1);
+
+            auto scan_line_half = [&](const int row_start, const int row_end, const Eigen::Vector3d t0, const Eigen::Vector3d t1, const Eigen::Vector3d t2)
+            {
+                for (int y_idx = row_start; y_idx < row_end; ++y_idx)
+                {
+                    double y = (y_idx + 1) * voxel_size[ax1];
+                    Eigen::Vector2d t3 = lerp(t0.y(), t1.y(), y, Eigen::Vector2d(t0.x(), t0.z()), Eigen::Vector2d(t1.x(), t1.z()));
+                    Eigen::Vector2d t4 = lerp(t0.y(), t2.y(), y, Eigen::Vector2d(t0.x(), t0.z()), Eigen::Vector2d(t2.x(), t2.z()));
+                    if (t3.x() > t4.x())
+                        std::swap(t3, t4);
+                    int line_start = std::clamp(int(t3.x() / voxel_size[ax0]), grid_min[ax0], grid_max[ax0] - 1);
+                    int line_end = std::clamp(int(t4.x() / voxel_size[ax0]), grid_min[ax0], grid_max[ax0] - 1);
+                    for (int x_idx = line_start; x_idx < line_end; ++x_idx)
+                    {
+                        double x = (x_idx + 1) * voxel_size[ax0];
+                        double z = lerp(t3.x(), t4.x(), x, t3.y(), t4.y());
+                        int z_idx = int(z / voxel_size[ax2]);
+                        if (z_idx >= grid_min[ax2] && z_idx < grid_max[ax2])
+                        {
+                            for (int dx = 0; dx < 2; ++dx)
+                            {
+                                for (int dy = 0; dy < 2; ++dy)
+                                {
+                                    VoxelCoord coord;
+                                    coord[ax0] = x_idx + dx;
+                                    coord[ax1] = y_idx + dy;
+                                    coord[ax2] = z_idx;
+                                    if (hash_table.find(coord) == hash_table.end())
+                                    {
+                                        hash_table[coord] = voxels.size();
+                                        voxels.push_back({coord.x, coord.y, coord.z});
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            scan_line_half(start, mid, t[0], t[1], t[2]);
+            scan_line_half(mid, end, t[2], t[1], t[0]);
+        };
+        scan_line_fill(0);
+        scan_line_fill(1);
+        scan_line_fill(2);
+    }
+}
+
+void intersect_qef(
+    const Eigen::Vector3f &voxel_size,
+    const Eigen::Vector3i &grid_min,
+    const Eigen::Vector3i &grid_max,
+    const std::vector<Eigen::Vector3f> &triangles,      // 3 vertices per triangle
+    std::unordered_map<VoxelCoord, size_t> &hash_table, // Hash table for voxel lookup
+    std::vector<int3> &voxels,                          // Output: Voxel coordinates
+    std::vector<Eigen::Vector3f> &means,                // Output: Mean vertex positions for each voxel
+    std::vector<float> &cnt,                            // Output: Number of intersections for each voxel
+    std::vector<bool3> &intersected,                    // Output: Whether edge of voxel intersects with triangle
+    std::vector<Eigen::Matrix4f> &qefs                  // Output: QEF matrices for each voxel
+)
+{
+    const size_t N_tri = triangles.size() / 3;
+
+    for (size_t i = 0; i < N_tri; ++i)
+    {
+        const Eigen::Vector3f &v0 = triangles[i * 3 + 0];
+        const Eigen::Vector3f &v1 = triangles[i * 3 + 1];
+        const Eigen::Vector3f &v2 = triangles[i * 3 + 2];
 
         // Compute edge vectors and face normal
         Eigen::Vector3f e0 = v1 - v0;
@@ -93,7 +192,8 @@ void intersect_qef(
           | /
           t2
          */
-        auto scan_line_fill = [&] (const int ax2) {
+        auto scan_line_fill = [&](const int ax2)
+        {
             int ax0 = (ax2 + 1) % 3;
             int ax1 = (ax2 + 2) % 3;
 
@@ -101,44 +201,56 @@ void intersect_qef(
             std::array<Eigen::Vector3d, 3> t = {
                 Eigen::Vector3d(v0[ax0], v0[ax1], v0[ax2]),
                 Eigen::Vector3d(v1[ax0], v1[ax1], v1[ax2]),
-                Eigen::Vector3d(v2[ax0], v2[ax1], v2[ax2])
-            };
-            std::sort(t.begin(), t.end(), [](const Eigen::Vector3d& a, const Eigen::Vector3d& b) { return a.y() < b.y(); });
+                Eigen::Vector3d(v2[ax0], v2[ax1], v2[ax2])};
+            std::sort(t.begin(), t.end(), [](const Eigen::Vector3d &a, const Eigen::Vector3d &b)
+                      { return a.y() < b.y(); });
 
             // Scan-line algorithm
             int start = std::clamp(int(t[0].y() / voxel_size[ax1]), grid_min[ax1], grid_max[ax1] - 1);
             int mid = std::clamp(int(t[1].y() / voxel_size[ax1]), grid_min[ax1], grid_max[ax1] - 1);
             int end = std::clamp(int(t[2].y() / voxel_size[ax1]), grid_min[ax1], grid_max[ax1] - 1);
 
-            auto scan_line_half = [&] (const int row_start, const int row_end, const Eigen::Vector3d t0, const Eigen::Vector3d t1, const Eigen::Vector3d t2) {
-            /*
-             t0
-             | \
-             t3-t4
-             |   \
-             t1---t2
-             */
-                for (int y_idx = row_start; y_idx < row_end; ++y_idx) {
+            auto scan_line_half = [&](const int row_start, const int row_end, const Eigen::Vector3d t0, const Eigen::Vector3d t1, const Eigen::Vector3d t2)
+            {
+                /*
+                 t0
+                 | \
+                 t3-t4
+                 |   \
+                 t1---t2
+                 */
+                for (int y_idx = row_start; y_idx < row_end; ++y_idx)
+                {
                     double y = (y_idx + 1) * voxel_size[ax1];
                     Eigen::Vector2d t3 = lerp(t0.y(), t1.y(), y, Eigen::Vector2d(t0.x(), t0.z()), Eigen::Vector2d(t1.x(), t1.z()));
                     Eigen::Vector2d t4 = lerp(t0.y(), t2.y(), y, Eigen::Vector2d(t0.x(), t0.z()), Eigen::Vector2d(t2.x(), t2.z()));
-                    if (t3.x() > t4.x()) std::swap(t3, t4);
+                    if (t3.x() > t4.x())
+                        std::swap(t3, t4);
                     int line_start = std::clamp(int(t3.x() / voxel_size[ax0]), grid_min[ax0], grid_max[ax0] - 1);
                     int line_end = std::clamp(int(t4.x() / voxel_size[ax0]), grid_min[ax0], grid_max[ax0] - 1);
-                    for (int x_idx = line_start; x_idx < line_end; ++x_idx) {
+                    for (int x_idx = line_start; x_idx < line_end; ++x_idx)
+                    {
                         double x = (x_idx + 1) * voxel_size[ax0];
                         double z = lerp(t3.x(), t4.x(), x, t3.y(), t4.y());
                         int z_idx = int(z / voxel_size[ax2]);
-                        if (z_idx >= grid_min[ax2] && z_idx < grid_max[ax2]) {
+                        if (z_idx >= grid_min[ax2] && z_idx < grid_max[ax2])
+                        {
                             // For 4-connected voxels
-                            for (int dx = 0; dx < 2; ++dx) {
-                                for (int dy = 0; dy < 2; ++dy) {
+                            for (int dx = 0; dx < 2; ++dx)
+                            {
+                                for (int dy = 0; dy < 2; ++dy)
+                                {
                                     VoxelCoord coord;
-                                    coord[ax0] = x_idx + dx; coord[ax1] = y_idx + dy; coord[ax2] = z_idx;
+                                    coord[ax0] = x_idx + dx;
+                                    coord[ax1] = y_idx + dy;
+                                    coord[ax2] = z_idx;
                                     Eigen::Vector3d intersect;
-                                    intersect[ax0] = x; intersect[ax1] = y; intersect[ax2] = z;
+                                    intersect[ax0] = x;
+                                    intersect[ax1] = y;
+                                    intersect[ax2] = z;
                                     auto kv = hash_table.find(coord);
-                                    if (kv == hash_table.end()) {
+                                    if (kv == hash_table.end())
+                                    {
                                         hash_table[coord] = voxels.size();
                                         voxels.push_back({coord.x, coord.y, coord.z});
                                         means.push_back(intersect.cast<float>());
@@ -148,7 +260,8 @@ void intersect_qef(
                                         if (dx == 0 && dy == 0)
                                             intersected.back()[ax2] = true;
                                     }
-                                    else {
+                                    else
+                                    {
                                         auto i = kv->second;
                                         means[i] += intersect.cast<float>();
                                         cnt[i] += 1;
@@ -163,7 +276,7 @@ void intersect_qef(
                 }
             };
             scan_line_half(start, mid, t[0], t[1], t[2]);
-            scan_line_half(mid, end, t[2], t[1], t[0]);   
+            scan_line_half(mid, end, t[2], t[1], t[0]);
         };
         scan_line_fill(0);
         scan_line_fill(1);
@@ -171,21 +284,22 @@ void intersect_qef(
     }
 }
 
-
 void face_qef(
-    const Eigen::Vector3f& voxel_size,
-    const Eigen::Vector3i& grid_min,
-    const Eigen::Vector3i& grid_max,
-    const std::vector<Eigen::Vector3f>& triangles, // 3 vertices per triangle
-    std::unordered_map<VoxelCoord, size_t>& hash_table, // Hash table for voxel lookup
-    std::vector<Eigen::Matrix4f>& qefs // Output: QEF matrices for each voxel
-) {
+    const Eigen::Vector3f &voxel_size,
+    const Eigen::Vector3i &grid_min,
+    const Eigen::Vector3i &grid_max,
+    const std::vector<Eigen::Vector3f> &triangles,      // 3 vertices per triangle
+    std::unordered_map<VoxelCoord, size_t> &hash_table, // Hash table for voxel lookup
+    std::vector<Eigen::Matrix4f> &qefs                  // Output: QEF matrices for each voxel
+)
+{
     const size_t N_tri = triangles.size() / 3;
 
-    for (size_t i = 0; i < N_tri; ++i) {
-        const Eigen::Vector3f& v0 = triangles[i * 3 + 0];
-        const Eigen::Vector3f& v1 = triangles[i * 3 + 1];
-        const Eigen::Vector3f& v2 = triangles[i * 3 + 2];
+    for (size_t i = 0; i < N_tri; ++i)
+    {
+        const Eigen::Vector3f &v0 = triangles[i * 3 + 0];
+        const Eigen::Vector3f &v1 = triangles[i * 3 + 1];
+        const Eigen::Vector3f &v2 = triangles[i * 3 + 2];
 
         // Compute edge vectors and face normal
         Eigen::Vector3f e0 = v1 - v0;
@@ -211,8 +325,7 @@ void face_qef(
         Eigen::Vector3f c(
             n.x() > 0.0f ? voxel_size.x() : 0.0f,
             n.y() > 0.0f ? voxel_size.y() : 0.0f,
-            n.z() > 0.0f ? voxel_size.z() : 0.0f
-        );
+            n.z() > 0.0f ? voxel_size.z() : 0.0f);
         float d1 = n.dot(c - v0);
         float d2 = n.dot(voxel_size - c - v0);
 
@@ -247,38 +360,52 @@ void face_qef(
         float d_zx_e2 = -n_zx_e2.dot(Eigen::Vector2f(v2.z(), v2.x())) + n_zx_e2.cwiseMax(0.0f).dot(Eigen::Vector2f(voxel_size.z(), voxel_size.x()));
 
         // Loop over candidate voxels inside bounding box
-        for (int z = bb_min.z(); z < bb_max.z(); ++z) {
-            for (int y = bb_min.y(); y < bb_max.y(); ++y) {
-                for (int x = bb_min.x(); x < bb_max.x(); ++x) {
+        for (int z = bb_min.z(); z < bb_max.z(); ++z)
+        {
+            for (int y = bb_min.y(); y < bb_max.y(); ++y)
+            {
+                for (int x = bb_min.x(); x < bb_max.x(); ++x)
+                {
                     // Voxel center
                     Eigen::Vector3f p = voxel_size.cwiseProduct(Eigen::Vector3f(x, y, z));
 
                     // Plane through box test
                     float nDOTp = n.dot(p);
-                    if (((nDOTp + d1) * (nDOTp + d2)) > 0.0f) continue;
+                    if (((nDOTp + d1) * (nDOTp + d2)) > 0.0f)
+                        continue;
 
                     // XY projection test
                     Eigen::Vector2f p_xy(p.x(), p.y());
-                    if (n_xy_e0.dot(p_xy) + d_xy_e0 < 0) continue;
-                    if (n_xy_e1.dot(p_xy) + d_xy_e1 < 0) continue;
-                    if (n_xy_e2.dot(p_xy) + d_xy_e2 < 0) continue;
+                    if (n_xy_e0.dot(p_xy) + d_xy_e0 < 0)
+                        continue;
+                    if (n_xy_e1.dot(p_xy) + d_xy_e1 < 0)
+                        continue;
+                    if (n_xy_e2.dot(p_xy) + d_xy_e2 < 0)
+                        continue;
 
                     // YZ projection test
                     Eigen::Vector2f p_yz(p.y(), p.z());
-                    if (n_yz_e0.dot(p_yz) + d_yz_e0 < 0) continue;
-                    if (n_yz_e1.dot(p_yz) + d_yz_e1 < 0) continue;
-                    if (n_yz_e2.dot(p_yz) + d_yz_e2 < 0) continue;
+                    if (n_yz_e0.dot(p_yz) + d_yz_e0 < 0)
+                        continue;
+                    if (n_yz_e1.dot(p_yz) + d_yz_e1 < 0)
+                        continue;
+                    if (n_yz_e2.dot(p_yz) + d_yz_e2 < 0)
+                        continue;
 
                     // ZX projection test
                     Eigen::Vector2f p_zx(p.z(), p.x());
-                    if (n_zx_e0.dot(p_zx) + d_zx_e0 < 0) continue;
-                    if (n_zx_e1.dot(p_zx) + d_zx_e1 < 0) continue;
-                    if (n_zx_e2.dot(p_zx) + d_zx_e2 < 0) continue;
+                    if (n_zx_e0.dot(p_zx) + d_zx_e0 < 0)
+                        continue;
+                    if (n_zx_e1.dot(p_zx) + d_zx_e1 < 0)
+                        continue;
+                    if (n_zx_e2.dot(p_zx) + d_zx_e2 < 0)
+                        continue;
 
                     // Passed all tests — mark voxel
                     auto coord = VoxelCoord{x, y, z};
                     auto kv = hash_table.find(coord);
-                    if (kv != hash_table.end()) {
+                    if (kv != hash_table.end())
+                    {
                         qefs[kv->second] += Q;
                     }
                 }
@@ -287,25 +414,27 @@ void face_qef(
     }
 }
 
-
 void boundry_qef(
-    const Eigen::Vector3f& voxel_size,
-    const Eigen::Vector3i& grid_min,
-    const Eigen::Vector3i& grid_max,
-    const std::vector<Eigen::Vector3f>& boundries, // 2 vertices per segment
-    const float boundary_weight,    // Weight for boundary edges
-    std::unordered_map<VoxelCoord, size_t>& hash_table, // Hash table for voxel lookup
-    std::vector<Eigen::Matrix4f>& qefs // Output: QEF matrices for each voxel
-) {
-    for (size_t i = 0; i < boundries.size() / 2; ++i) {
-        const Eigen::Vector3f& v0 = boundries[i * 2 + 0];
-        const Eigen::Vector3f& v1 = boundries[i * 2 + 1];
+    const Eigen::Vector3f &voxel_size,
+    const Eigen::Vector3i &grid_min,
+    const Eigen::Vector3i &grid_max,
+    const std::vector<Eigen::Vector3f> &boundries,      // 2 vertices per segment
+    const float boundary_weight,                        // Weight for boundary edges
+    std::unordered_map<VoxelCoord, size_t> &hash_table, // Hash table for voxel lookup
+    std::vector<Eigen::Matrix4f> &qefs                  // Output: QEF matrices for each voxel
+)
+{
+    for (size_t i = 0; i < boundries.size() / 2; ++i)
+    {
+        const Eigen::Vector3f &v0 = boundries[i * 2 + 0];
+        const Eigen::Vector3f &v1 = boundries[i * 2 + 1];
 
         // Calculate the QEF for the edge (boundary) defined by v0 and v1
         Eigen::Vector3d dir(v1.x() - v0.x(), v1.y() - v0.y(), v1.z() - v0.z());
         double segment_length = dir.norm();
-        if (segment_length < 1e-6d) continue; // Skip degenerate edges (zero-length)
-        dir.normalize();  // unit direction vector
+        if (segment_length < 1e-6d)
+            continue;    // Skip degenerate edges (zero-length)
+        dir.normalize(); // unit direction vector
 
         // Projection matrix orthogonal to the direction: I - d d^T
         Eigen::Matrix3f A = Eigen::Matrix3f::Identity() - (dir * dir.transpose()).cast<float>();
@@ -333,11 +462,15 @@ void boundry_qef(
         Eigen::Vector3i step = (dir.array() > 0).select(Eigen::Vector3i(1, 1, 1), Eigen::Vector3i(-1, -1, -1));
 
         Eigen::Vector3d tMax, tDelta;
-        for (int axis = 0; axis < 3; ++axis) {
-            if (dir[axis] == 0.0d) {
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            if (dir[axis] == 0.0d)
+            {
                 tMax[axis] = std::numeric_limits<double>::infinity();
                 tDelta[axis] = std::numeric_limits<double>::infinity();
-            } else {
+            }
+            else
+            {
                 float voxel_border = voxel_size[axis] * (v0_voxel[axis] + (step[axis] > 0 ? 1 : 0));
                 tMax[axis] = (voxel_border - v0[axis]) / dir[axis];
                 tDelta[axis] = voxel_size[axis] / std::abs(dir[axis]);
@@ -352,15 +485,20 @@ void boundry_qef(
         voxels.push_back({current.x(), current.y(), current.z()});
 
         // Traverse the voxels
-        while (true) {
+        while (true)
+        {
             int axis;
-            if (tMax.x() < tMax.y()) {
+            if (tMax.x() < tMax.y())
+            {
                 axis = (tMax.x() < tMax.z()) ? 0 : 2;
-            } else {
+            }
+            else
+            {
                 axis = (tMax.y() < tMax.z()) ? 1 : 2;
             }
 
-            if (tMax[axis] > segment_length) break;
+            if (tMax[axis] > segment_length)
+                break;
 
             current[axis] += step[axis];
             tMax[axis] += tDelta[axis];
@@ -369,12 +507,15 @@ void boundry_qef(
         }
 
         // Accumulate QEF for each voxel passed through
-        for (const auto& coord : voxels) {
+        for (const auto &coord : voxels)
+        {
             // Make sure the voxel is within bounds
             if ((coord.x < grid_min.x() || coord.x >= grid_max.x()) ||
                 (coord.y < grid_min.y() || coord.y >= grid_max.y()) ||
-                (coord.z < grid_min.z() || coord.z >= grid_max.z())) continue;
-            if (!hash_table.count(coord)) continue; // Skip if voxel not in hash table
+                (coord.z < grid_min.z() || coord.z >= grid_max.z()))
+                continue;
+            if (!hash_table.count(coord))
+                continue; // Skip if voxel not in hash table
 
             // Accumulate the QEF for this voxel
             qefs[hash_table[coord]] += boundary_weight * Q; // Scale by boundary weight
@@ -382,11 +523,10 @@ void boundry_qef(
     }
 }
 
-
 std::array<int3, 2> quad_to_2tri(
-    const std::vector<float3>& vertices,
-    const int4& quad_indices
-) {
+    const std::vector<float3> &vertices,
+    const int4 &quad_indices)
+{
     int ia = quad_indices.x;
     int ib = quad_indices.y;
     int ic = quad_indices.z;
@@ -407,22 +547,25 @@ std::array<int3, 2> quad_to_2tri(
     Eigen::Vector3f n_bcd = (c - b).cross(d - b).normalized();
     float angle_bd = std::acos(std::clamp(n_abd.dot(n_bcd), -1.0f, 1.0f));
 
-    if (angle_ac <= angle_bd) {
+    if (angle_ac <= angle_bd)
+    {
         return {int3{ia, ib, ic}, int3{ia, ic, id}};
-    } else {
+    }
+    else
+    {
         return {int3{ia, ib, id}, int3{ib, ic, id}};
     }
 }
 
-
 void face_from_dual_vertices(
-    const std::unordered_map<VoxelCoord, size_t>& hash_table,
-    const std::vector<int3>& voxels,
-    const std::vector<float3>& dual_vertices,
-    const std::vector<bool3>& intersected,
-    std::vector<int3>& face_indices
-) {
-    for (int i = 0; i < dual_vertices.size(); ++i) {
+    const std::unordered_map<VoxelCoord, size_t> &hash_table,
+    const std::vector<int3> &voxels,
+    const std::vector<float3> &dual_vertices,
+    const std::vector<bool3> &intersected,
+    std::vector<int3> &face_indices)
+{
+    for (int i = 0; i < dual_vertices.size(); ++i)
+    {
         int3 coord = voxels[i];
         bool3 is_intersected = intersected[i];
 
@@ -433,23 +576,25 @@ void face_from_dual_vertices(
             get_or_default(hash_table, VoxelCoord{coord.x + 1, coord.y + 1, coord.z}, kInvalidIndex),
             get_or_default(hash_table, VoxelCoord{coord.x, coord.y, coord.z + 1}, kInvalidIndex),
             get_or_default(hash_table, VoxelCoord{coord.x + 1, coord.y, coord.z + 1}, kInvalidIndex),
-            get_or_default(hash_table, VoxelCoord{coord.x, coord.y + 1, coord.z + 1}, kInvalidIndex)
-        };
+            get_or_default(hash_table, VoxelCoord{coord.x, coord.y + 1, coord.z + 1}, kInvalidIndex)};
 
         // xy-plane
-        if (is_intersected[2] && neigh_indices[0] != kInvalidIndex && neigh_indices[1] != kInvalidIndex && neigh_indices[2] != kInvalidIndex) {
+        if (is_intersected[2] && neigh_indices[0] != kInvalidIndex && neigh_indices[1] != kInvalidIndex && neigh_indices[2] != kInvalidIndex)
+        {
             int4 quad_indices{i, neigh_indices[0], neigh_indices[2], neigh_indices[1]};
             auto tri_indices = quad_to_2tri(dual_vertices, quad_indices);
             face_indices.insert(face_indices.end(), tri_indices.begin(), tri_indices.end());
         }
         // yz-plane
-        if (is_intersected[0] && neigh_indices[1] != kInvalidIndex && neigh_indices[3] != kInvalidIndex && neigh_indices[5] != kInvalidIndex) {
+        if (is_intersected[0] && neigh_indices[1] != kInvalidIndex && neigh_indices[3] != kInvalidIndex && neigh_indices[5] != kInvalidIndex)
+        {
             int4 quad_indices{i, neigh_indices[1], neigh_indices[5], neigh_indices[3]};
             auto tri_indices = quad_to_2tri(dual_vertices, quad_indices);
             face_indices.insert(face_indices.end(), tri_indices.begin(), tri_indices.end());
         }
         // xz-plane
-        if (is_intersected[1] && neigh_indices[0] != kInvalidIndex && neigh_indices[3] != kInvalidIndex && neigh_indices[4] != kInvalidIndex) {
+        if (is_intersected[1] && neigh_indices[0] != kInvalidIndex && neigh_indices[3] != kInvalidIndex && neigh_indices[4] != kInvalidIndex)
+        {
             int4 quad_indices{i, neigh_indices[0], neigh_indices[4], neigh_indices[3]};
             auto tri_indices = quad_to_2tri(dual_vertices, quad_indices);
             face_indices.insert(face_indices.end(), tri_indices.begin(), tri_indices.end());
@@ -457,13 +602,54 @@ void face_from_dual_vertices(
     }
 }
 
+torch::Tensor intersect_occ_cpu(
+    const torch::Tensor &triangles,
+    const std::vector<float> &voxel_size,
+    const std::vector<int64_t> &grid_range)
+{
+    TORCH_CHECK(!triangles.is_cuda(), "triangles must be a CPU tensor");
+
+    const int64_t N_tri = triangles.size(0);
+    const float *t_ptr = triangles.data_ptr<float>();
+
+    Eigen::Vector3f e_voxel_size(voxel_size[0], voxel_size[1], voxel_size[2]);
+    Eigen::Vector3i e_grid_min(
+        static_cast<int>(grid_range[0]),
+        static_cast<int>(grid_range[1]),
+        static_cast<int>(grid_range[2]));
+    Eigen::Vector3i e_grid_max(
+        static_cast<int>(grid_range[3]),
+        static_cast<int>(grid_range[4]),
+        static_cast<int>(grid_range[5]));
+
+    std::vector<Eigen::Vector3f> e_triangles;
+    e_triangles.reserve(N_tri * 3);
+    for (int64_t i = 0; i < N_tri * 3; ++i)
+    {
+        e_triangles.push_back(Eigen::Vector3f(
+            t_ptr[i * 3 + 0],
+            t_ptr[i * 3 + 1],
+            t_ptr[i * 3 + 2]));
+    }
+
+    std::unordered_map<VoxelCoord, size_t> hash_table;
+    std::vector<int3> voxels;
+    intersect_occ(e_voxel_size, e_grid_min, e_grid_max, e_triangles, hash_table, voxels);
+
+    if (voxels.empty())
+    {
+        return torch::empty({0, 3}, torch::kInt32);
+    }
+    return torch::from_blob(voxels.data(), {static_cast<int64_t>(voxels.size()), 3}, torch::kInt32).clone();
+}
+
 /**
  * Extract flexible dual grid from a triangle mesh.
  *
  * @param vertices: Tensor of shape (N, 3) containing vertex positions.
  * @param faces: Tensor of shape (M, 3) containing triangle vertex indices.
- * @param voxel_size: Tensor of shape (3,) containing the voxel size in each dimension.
- * @param grid_range: Tensor of shape (2, 3) containing the minimum and maximum coordinates of the grid range.
+ * @param voxel_size: Host vector of length 3 containing the voxel size in each dimension.
+ * @param grid_range: Host vector of length 6 containing the minimum and maximum coordinates of the grid range.
  * @param face_weight: Weight for the face edges in the QEF computation.
  * @param boundary_weight: Weight for the boundary edges in the QEF computation.
  * @param regularization_weight: Regularization factor to apply to the QEF matrices.
@@ -472,119 +658,135 @@ void face_from_dual_vertices(
  * @return a tuple ((x, y, z), vertices, intersected, faces) containing the remeshed vertices and the corresponding voxel grid.
  */
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_grid_cpu(
-    const torch::Tensor& vertices,
-    const torch::Tensor& faces,
-    const torch::Tensor& voxel_size,
-    const torch::Tensor& grid_range,
+    const torch::Tensor &vertices,
+    const torch::Tensor &faces,
+    const std::vector<float> &voxel_size,
+    const std::vector<int64_t> &grid_range,
     float face_weight,
     float boundary_weight,
     float regularization_weight,
-    bool timing
-) {
+    bool timing)
+{
+    TORCH_CHECK(!vertices.is_cuda(), "vertices must be a CPU tensor");
+    TORCH_CHECK(!faces.is_cuda(), "faces must be a CPU tensor");
+
     const int F = faces.size(0);
-    const float* v_ptr = vertices.data_ptr<float>();
-    const int* f_ptr = faces.data_ptr<int>();
-    const float* voxel_size_ptr = voxel_size.data_ptr<float>();
-    const int* grid_range_ptr = grid_range.data_ptr<int>();
+    const float *v_ptr = vertices.data_ptr<float>();
+    const int *f_ptr = faces.data_ptr<int>();
     clock_t start, end;
     std::unordered_map<VoxelCoord, size_t> hash_table;
-    std::vector<int3> voxels; // Voxel coordinates
+    std::vector<int3> voxels;           // Voxel coordinates
     std::vector<Eigen::Vector3f> means; // Mean vertex positions for each voxel
-    std::vector<float> cnt; // Number of intersections for each voxel
-    std::vector<bool3> intersected; // Indicate whether edges of voxels intersect with surface
-    std::vector<Eigen::Matrix4f> qefs; // QEF matrices for each voxel
+    std::vector<float> cnt;             // Number of intersections for each voxel
+    std::vector<bool3> intersected;     // Indicate whether edges of voxels intersect with surface
+    std::vector<Eigen::Matrix4f> qefs;  // QEF matrices for each voxel
 
     // Convert tensors to Eigen types
-    Eigen::Vector3f e_voxel_size(voxel_size_ptr[0], voxel_size_ptr[1], voxel_size_ptr[2]);
-    Eigen::Vector3i e_grid_min(grid_range_ptr[0], grid_range_ptr[1], grid_range_ptr[2]);
-    Eigen::Vector3i e_grid_max(grid_range_ptr[3], grid_range_ptr[4], grid_range_ptr[5]);
-    
+    Eigen::Vector3f e_voxel_size(voxel_size[0], voxel_size[1], voxel_size[2]);
+    Eigen::Vector3i e_grid_min(
+        static_cast<int>(grid_range[0]),
+        static_cast<int>(grid_range[1]),
+        static_cast<int>(grid_range[2]));
+    Eigen::Vector3i e_grid_max(
+        static_cast<int>(grid_range[3]),
+        static_cast<int>(grid_range[4]),
+        static_cast<int>(grid_range[5]));
+
     // Intersect QEF computation
     start = clock();
     std::vector<Eigen::Vector3f> triangles;
     triangles.reserve(F * 3);
-    for (int f = 0; f < F; ++f) {
-        for (int v = 0; v < 3; ++v) {
+    for (int f = 0; f < F; ++f)
+    {
+        for (int v = 0; v < 3; ++v)
+        {
             triangles.push_back(Eigen::Vector3f(
                 v_ptr[f_ptr[f * 3 + v] * 3 + 0],
                 v_ptr[f_ptr[f * 3 + v] * 3 + 1],
-                v_ptr[f_ptr[f * 3 + v] * 3 + 2]
-            ));
+                v_ptr[f_ptr[f * 3 + v] * 3 + 2]));
         }
     }
     intersect_qef(e_voxel_size, e_grid_min, e_grid_max, triangles, hash_table, voxels, means, cnt, intersected, qefs);
     end = clock();
-    if (timing) std::cout << "Intersect QEF computation took " << double(end - start) / CLOCKS_PER_SEC << " seconds." << std::endl;
+    if (timing)
+        std::cout << "Intersect QEF computation took " << double(end - start) / CLOCKS_PER_SEC << " seconds." << std::endl;
 
     // Face QEF computation
-    if (face_weight > 0.0f) {
+    if (face_weight > 0.0f)
+    {
         start = clock();
         face_qef(e_voxel_size, e_grid_min, e_grid_max, triangles, hash_table, qefs);
         end = clock();
-        if (timing) std::cout << "Face QEF computation took " << double(end - start) / CLOCKS_PER_SEC << " seconds." << std::endl;
+        if (timing)
+            std::cout << "Face QEF computation took " << double(end - start) / CLOCKS_PER_SEC << " seconds." << std::endl;
     }
 
     // Boundary QEF computation
-    if (boundary_weight > 0.0f) {
+    if (boundary_weight > 0.0f)
+    {
         start = clock();
         std::map<std::pair<int, int>, int> edge_count;
-        for (int f = 0; f < F; ++f) {
-            for (int v0 = 0; v0 < 3; ++v0) {
+        for (int f = 0; f < F; ++f)
+        {
+            for (int v0 = 0; v0 < 3; ++v0)
+            {
                 int e0 = f_ptr[f * 3 + v0];
                 int e1 = f_ptr[f * 3 + (v0 + 1) % 3];
-                if (e0 > e1) std::swap(e0, e1);
+                if (e0 > e1)
+                    std::swap(e0, e1);
                 edge_count[std::make_pair(e0, e1)]++;
             }
         }
         std::vector<Eigen::Vector3f> boundries;
-        for (const auto& e : edge_count) {
-            if (e.second == 1) {
+        for (const auto &e : edge_count)
+        {
+            if (e.second == 1)
+            {
                 int v0 = e.first.first;
                 int v1 = e.first.second;
                 boundries.push_back(Eigen::Vector3f(
                     v_ptr[v0 * 3 + 0],
                     v_ptr[v0 * 3 + 1],
-                    v_ptr[v0 * 3 + 2]
-                ));
+                    v_ptr[v0 * 3 + 2]));
                 boundries.push_back(Eigen::Vector3f(
                     v_ptr[v1 * 3 + 0],
                     v_ptr[v1 * 3 + 1],
-                    v_ptr[v1 * 3 + 2]
-                ));
+                    v_ptr[v1 * 3 + 2]));
             }
         }
         boundry_qef(e_voxel_size, e_grid_min, e_grid_max, boundries, boundary_weight, hash_table, qefs);
         end = clock();
-        if (timing) std::cout << "Boundary QEF computation took " << double(end - start) / CLOCKS_PER_SEC << " seconds." << std::endl;
+        if (timing)
+            std::cout << "Boundary QEF computation took " << double(end - start) / CLOCKS_PER_SEC << " seconds." << std::endl;
     }
 
     // Solve the QEF system to obtain final dual vertices
     start = clock();
     std::vector<float3> dual_vertices(voxels.size());
-    for (int i = 0; i < voxels.size(); ++i) {
+    for (int i = 0; i < voxels.size(); ++i)
+    {
         int3 coord = voxels[i];
         Eigen::Matrix4f Q = qefs[i];
         float min_corner[3] = {
             coord.x * e_voxel_size.x(),
             coord.y * e_voxel_size.y(),
-            coord.z * e_voxel_size.z()
-        };
+            coord.z * e_voxel_size.z()};
         float max_corner[3] = {
             (coord.x + 1) * e_voxel_size.x(),
             (coord.y + 1) * e_voxel_size.y(),
-            (coord.z + 1) * e_voxel_size.z()
-        };
+            (coord.z + 1) * e_voxel_size.z()};
 
         // Add regularization term
-        if (regularization_weight > 0.0f) {
+        if (regularization_weight > 0.0f)
+        {
             Eigen::Vector3f p = means[i] / cnt[i];
 
             // Construct the QEF matrix for this vertex
             Eigen::Matrix4f Qreg = Eigen::Matrix4f::Zero();
-            Qreg.topLeftCorner<3,3>() = Eigen::Matrix3f::Identity();
-            Qreg.block<3,1>(0,3)    = -p;
-            Qreg.block<1,3>(3,0)    = -p.transpose();
-            Qreg(3,3)               = p.dot(p);
+            Qreg.topLeftCorner<3, 3>() = Eigen::Matrix3f::Identity();
+            Qreg.block<3, 1>(0, 3) = -p;
+            Qreg.block<1, 3>(3, 0) = -p.transpose();
+            Qreg(3, 3) = p.dot(p);
 
             Q += regularization_weight * cnt[i] * Qreg; // Scale by regularization weight
         }
@@ -595,15 +797,16 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
         Eigen::Vector3f v_new = A.colPivHouseholderQr().solve(b);
 
         if (!(
-            v_new.x() >= min_corner[0] && v_new.x() <= max_corner[0] &&
-            v_new.y() >= min_corner[1] && v_new.y() <= max_corner[1] &&
-            v_new.z() >= min_corner[2] && v_new.z() <= max_corner[2]
-        )) {
+                v_new.x() >= min_corner[0] && v_new.x() <= max_corner[0] &&
+                v_new.y() >= min_corner[1] && v_new.y() <= max_corner[1] &&
+                v_new.z() >= min_corner[2] && v_new.z() <= max_corner[2]))
+        {
             // Starting enumeration of constraints
             float best = std::numeric_limits<float>::infinity();
 
             // Solve single-constraint
-            auto solve_single_constraint = [&](int fixed_axis) {
+            auto solve_single_constraint = [&](int fixed_axis)
+            {
                 int ax1 = (fixed_axis + 1) % 3;
                 int ax2 = (fixed_axis + 2) % 3;
 
@@ -612,9 +815,9 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
                 Eigen::Vector2f q, b, x;
 
                 A << Q(ax1, ax1), Q(ax1, ax2),
-                     Q(ax2, ax1), Q(ax2, ax2);
+                    Q(ax2, ax1), Q(ax2, ax2);
                 B << Q(ax1, fixed_axis), Q(ax1, 3),
-                     Q(ax2, fixed_axis), Q(ax2, 3);
+                    Q(ax2, fixed_axis), Q(ax2, 3);
                 auto Asol = A.colPivHouseholderQr();
 
                 // if lower bound
@@ -623,15 +826,16 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
                 x = Asol.solve(b);
                 if (
                     x.x() >= min_corner[ax1] && x.x() <= max_corner[ax1] &&
-                    x.y() >= min_corner[ax2] && x.y() <= max_corner[ax2]
-                ) {
+                    x.y() >= min_corner[ax2] && x.y() <= max_corner[ax2])
+                {
                     Eigen::Vector4f p;
                     p[fixed_axis] = min_corner[fixed_axis];
                     p[ax1] = x.x();
                     p[ax2] = x.y();
                     p[3] = 1.0f;
                     float err = p.transpose() * Q * p;
-                    if (err < best) {
+                    if (err < best)
+                    {
                         best = err;
                         v_new << p[0], p[1], p[2];
                     }
@@ -643,15 +847,16 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
                 x = Asol.solve(b);
                 if (
                     x.x() >= min_corner[ax1] && x.x() <= max_corner[ax1] &&
-                    x.y() >= min_corner[ax2] && x.y() <= max_corner[ax2]
-                ) {
+                    x.y() >= min_corner[ax2] && x.y() <= max_corner[ax2])
+                {
                     Eigen::Vector4f p;
                     p[fixed_axis] = max_corner[fixed_axis];
                     p[ax1] = x.x();
                     p[ax2] = x.y();
                     p[3] = 1.0f;
                     float err = p.transpose() * Q * p;
-                    if (err < best) {
+                    if (err < best)
+                    {
                         best = err;
                         v_new << p[0], p[1], p[2];
                     }
@@ -662,7 +867,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
             solve_single_constraint(2); // fix z
 
             // Solve two-constraint
-            auto solve_two_constraint = [&](int free_axis) {
+            auto solve_two_constraint = [&](int free_axis)
+            {
                 int ax1 = (free_axis + 1) % 3;
                 int ax2 = (free_axis + 2) % 3;
 
@@ -675,14 +881,16 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
                 // if lower-lower bound
                 q << min_corner[ax1], min_corner[ax2], 1;
                 x = -(b.dot(q)) / a;
-                if (x >= min_corner[free_axis] && x <= max_corner[free_axis]) {
+                if (x >= min_corner[free_axis] && x <= max_corner[free_axis])
+                {
                     Eigen::Vector4f p;
                     p[free_axis] = x;
                     p[ax1] = min_corner[ax1];
                     p[ax2] = min_corner[ax2];
                     p[3] = 1.0f;
                     float err = p.transpose() * Q * p;
-                    if (err < best) {
+                    if (err < best)
+                    {
                         best = err;
                         v_new << p[0], p[1], p[2];
                     }
@@ -691,14 +899,16 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
                 // if lower-upper bound
                 q << min_corner[ax1], max_corner[ax2], 1;
                 x = -(b.dot(q)) / a;
-                if (x >= min_corner[free_axis] && x <= max_corner[free_axis]) {
+                if (x >= min_corner[free_axis] && x <= max_corner[free_axis])
+                {
                     Eigen::Vector4f p;
                     p[free_axis] = x;
                     p[ax1] = min_corner[ax1];
                     p[ax2] = max_corner[ax2];
                     p[3] = 1.0f;
                     float err = p.transpose() * Q * p;
-                    if (err < best) {
+                    if (err < best)
+                    {
                         best = err;
                         v_new << p[0], p[1], p[2];
                     }
@@ -707,14 +917,16 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
                 // if upper-lower bound
                 q << max_corner[ax1], min_corner[ax2], 1;
                 x = -(b.dot(q)) / a;
-                if (x >= min_corner[free_axis] && x <= max_corner[free_axis]) {
+                if (x >= min_corner[free_axis] && x <= max_corner[free_axis])
+                {
                     Eigen::Vector4f p;
                     p[free_axis] = x;
                     p[ax1] = max_corner[ax1];
                     p[ax2] = min_corner[ax2];
                     p[3] = 1.0f;
                     float err = p.transpose() * Q * p;
-                    if (err < best) {
+                    if (err < best)
+                    {
                         best = err;
                         v_new << p[0], p[1], p[2];
                     }
@@ -723,14 +935,16 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
                 // if upper-upper bound
                 q << max_corner[ax1], max_corner[ax2], 1;
                 x = -(b.dot(q)) / a;
-                if (x >= min_corner[free_axis] && x <= max_corner[free_axis]) {
+                if (x >= min_corner[free_axis] && x <= max_corner[free_axis])
+                {
                     Eigen::Vector4f p;
                     p[free_axis] = x;
                     p[ax1] = max_corner[ax1];
                     p[ax2] = max_corner[ax2];
                     p[3] = 1.0f;
                     float err = p.transpose() * Q * p;
-                    if (err < best) {
+                    if (err < best)
+                    {
                         best = err;
                         v_new << p[0], p[1], p[2];
                     }
@@ -741,9 +955,12 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
             solve_two_constraint(2); // free z
 
             // Solve three-constraint
-            for (int x_constraint = 0; x_constraint < 2; ++x_constraint) {
-                for (int y_constraint = 0; y_constraint < 2; ++y_constraint) {
-                    for (int z_constraint = 0; z_constraint < 2; ++z_constraint) {
+            for (int x_constraint = 0; x_constraint < 2; ++x_constraint)
+            {
+                for (int y_constraint = 0; y_constraint < 2; ++y_constraint)
+                {
+                    for (int z_constraint = 0; z_constraint < 2; ++z_constraint)
+                    {
                         Eigen::Vector4f p;
                         p[0] = x_constraint ? min_corner[0] : max_corner[0];
                         p[1] = y_constraint ? min_corner[1] : max_corner[1];
@@ -751,7 +968,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
                         p[3] = 1.0f;
 
                         float err = p.transpose() * Q * p;
-                        if (err < best) {
+                        if (err < best)
+                        {
                             best = err;
                             v_new << p[0], p[1], p[2];
                         }
@@ -764,12 +982,11 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> mesh_to_flexible_dual_gr
         dual_vertices[i] = float3{v_new.x(), v_new.y(), v_new.z()};
     }
     end = clock();
-    if (timing) std::cout << "Dual vertices computation took " << double(end - start) / CLOCKS_PER_SEC << " seconds." << std::endl;
+    if (timing)
+        std::cout << "Dual vertices computation took " << double(end - start) / CLOCKS_PER_SEC << " seconds." << std::endl;
 
     return std::make_tuple(
-        torch::from_blob(voxels.data(), {int(voxels .size()), 3}, torch::kInt32).clone(),
+        torch::from_blob(voxels.data(), {int(voxels.size()), 3}, torch::kInt32).clone(),
         torch::from_blob(dual_vertices.data(), {int(dual_vertices.size()), 3}, torch::kFloat32).clone(),
-        torch::from_blob(intersected.data(), {int(intersected.size()), 3}, torch::kBool).clone()
-    );
+        torch::from_blob(intersected.data(), {int(intersected.size()), 3}, torch::kBool).clone());
 }
-
