@@ -711,6 +711,12 @@ textured_mesh_to_volumetric_attr_cpu(
     const float mipLevelOffset,
     const bool timing
 ) {
+    TORCH_CHECK(!voxel_size.is_cuda(), "voxel_size must be a CPU tensor");
+    TORCH_CHECK(!grid_range.is_cuda(), "grid_range must be a CPU tensor");
+    TORCH_CHECK(!vertices.is_cuda(), "vertices must be a CPU tensor");
+    TORCH_CHECK(!normals.is_cuda(), "normals must be a CPU tensor");
+    TORCH_CHECK(!uvs.is_cuda(), "uvs must be a CPU tensor");
+    TORCH_CHECK(!materialIds.is_cuda(), "materialIds must be a CPU tensor");
     auto N_mat = baseColorFactor.size();
     int N_tri = vertices.size(0);
 
@@ -736,6 +742,14 @@ textured_mesh_to_volumetric_attr_cpu(
     std::vector<int> H_nTex(N_mat), W_nTex(N_mat);
 
     for (int i = 0; i < N_mat; ++i) {
+        TORCH_CHECK(!baseColorFactor[i].is_cuda(), "baseColorFactor tensors must be CPU tensors");
+        TORCH_CHECK(!baseColorTexture[i].is_cuda(), "baseColorTexture tensors must be CPU tensors");
+        TORCH_CHECK(!metallicTexture[i].is_cuda(), "metallicTexture tensors must be CPU tensors");
+        TORCH_CHECK(!roughnessTexture[i].is_cuda(), "roughnessTexture tensors must be CPU tensors");
+        TORCH_CHECK(!emissiveFactor[i].is_cuda(), "emissiveFactor tensors must be CPU tensors");
+        TORCH_CHECK(!emissiveTexture[i].is_cuda(), "emissiveTexture tensors must be CPU tensors");
+        TORCH_CHECK(!alphaTexture[i].is_cuda(), "alphaTexture tensors must be CPU tensors");
+        TORCH_CHECK(!normalTexture[i].is_cuda(), "normalTexture tensors must be CPU tensors");
         baseColorFactor_ptrs[i] = baseColorFactor[i].contiguous().data_ptr<float>();
         if (baseColorTexture[i].numel() > 0) {
             baseColorTexture_ptrs[i] = baseColorTexture[i].contiguous().data_ptr<uint8_t>();
@@ -869,4 +883,3 @@ textured_mesh_to_volumetric_attr_cpu(
         out_normals
     );
 }
-

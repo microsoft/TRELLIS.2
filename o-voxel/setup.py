@@ -4,6 +4,7 @@ import os
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 BUILD_TARGET = os.environ.get("BUILD_TARGET", "auto")
+OVOXEL_VERSION = os.environ.get("OVOXEL_VERSION", "0.0.1")
 
 if BUILD_TARGET == "auto":
     if IS_HIP_EXTENSION:
@@ -24,10 +25,12 @@ else:
 
 setup(
     name="o_voxel",
+    version=OVOXEL_VERSION,
+    python_requires=">=3.8",
     packages=[
-        'o_voxel',
-        'o_voxel.convert',
-        'o_voxel.io',
+        "o_voxel",
+        "o_voxel.convert",
+        "o_voxel.io",
     ],
     ext_modules=[
         CUDAExtension(
@@ -38,11 +41,11 @@ setup(
                 # Convert functions
                 "src/convert/flexible_dual_grid.cpp",
                 "src/convert/volumetic_attr.cpp",
-                "src/convert/mesh_to_flexible_dual_grid_gpu/torch_bindings.cu",
-                "src/convert/mesh_to_flexible_dual_grid_gpu/flexible_dual_grid_gpu.cu",
-                "src/convert/mesh_to_flexible_dual_grid_gpu/intersection_qef.cu",
-                "src/convert/mesh_to_flexible_dual_grid_gpu/voxelize_mesh_oct.cu",
-                "src/convert/mesh_to_flexible_dual_grid_gpu/voxel_traverse_edge_dda.cu",
+                "src/convert/mesh_to_flexible_dual_grid_gpu/intersect_qef.cu",
+                "src/convert/mesh_to_flexible_dual_grid_gpu/face_qef.cu",
+                "src/convert/mesh_to_flexible_dual_grid_gpu/boundary_qef.cu",
+                "src/convert/mesh_to_flexible_dual_grid_gpu/mesh_to_flexible_dual_grid.cu",
+                "src/convert/mesh_to_flexible_dual_grid_gpu/voxelize_mesh_octree.cu",
                 ## Serialization functions
                 "src/serialize/api.cu",
                 "src/serialize/hilbert.cu",
@@ -53,7 +56,6 @@ setup(
                 "src/io/filter_neighbor.cpp",
                 # Rasterization functions
                 "src/rasterize/rasterize.cu",
-                
                 # main
                 "src/ext.cpp",
             ],
@@ -62,11 +64,12 @@ setup(
             ],
             extra_compile_args={
                 "cxx": ["-O3", "-std=c++17"],
-                "nvcc": ["-O3","-std=c++17"] + cc_flag,
-            }
+                "nvcc": ["-O3", "-std=c++17"] + cc_flag,
+            },
         )
     ],
-    cmdclass={
-        'build_ext': BuildExtension
-    }
+    package_data={
+        "o_voxel": ["_C.pyi"],
+    },
+    cmdclass={"build_ext": BuildExtension},
 )
