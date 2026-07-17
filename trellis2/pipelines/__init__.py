@@ -32,6 +32,7 @@ def from_pretrained(path: str):
     """
     import os
     import json
+    import sys
     is_local = os.path.exists(f"{path}/pipeline.json")
 
     if is_local:
@@ -42,7 +43,9 @@ def from_pretrained(path: str):
 
     with open(config_file, 'r') as f:
         config = json.load(f)
-    return globals()[config['name']].from_pretrained(path)
+    # getattr routes through the module's lazy __getattr__; globals() bypasses it and
+    # raises KeyError when from_pretrained is the first touch of the module.
+    return getattr(sys.modules[__name__], config['name']).from_pretrained(path)
 
 
 # For PyLance
