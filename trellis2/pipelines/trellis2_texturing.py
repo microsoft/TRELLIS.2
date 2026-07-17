@@ -117,7 +117,9 @@ class Trellis2TexturingPipeline(Pipeline):
         vertices[:, 1] = -vertices[:, 2]
         vertices[:, 2] = tmp
         assert np.all(vertices >= -0.5) and np.all(vertices <= 0.5), 'vertices out of range'
-        return trimesh.Trimesh(vertices=vertices, faces=mesh.faces, process=False)
+        # Carry the visual through so postprocess_mesh's keep-existing-UVs branch is reachable
+        # (vertex order is unchanged, so per-vertex UVs stay valid).
+        return trimesh.Trimesh(vertices=vertices, faces=mesh.faces, visual=mesh.visual, process=False)
 
     def preprocess_image(self, input: Image.Image) -> Image.Image:
         """
@@ -291,9 +293,11 @@ class Trellis2TexturingPipeline(Pipeline):
         resolution: int = 1024,
         texture_size: int = 1024,
     ) -> trimesh.Trimesh:
-        vertices = mesh.vertices
-        faces = mesh.faces
-        normals = mesh.vertex_normals
+        # Copies: trimesh caches (vertex_normals) are read-only, and the axis swap below
+        # writes in place — only the uv-unwrap branch replaced these with fresh arrays.
+        vertices = np.array(mesh.vertices)
+        faces = np.array(mesh.faces)
+        normals = np.array(mesh.vertex_normals)
         vertices_torch = torch.from_numpy(vertices).float().cuda()
         faces_torch = torch.from_numpy(faces).int().cuda()
         if hasattr(mesh, 'visual') and hasattr(mesh.visual, 'uv') and mesh.visual.uv is not None:
