@@ -19,6 +19,10 @@ class DinoV2FeatureExtractor:
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
+    @property
+    def device(self) -> torch.device:
+        return next(self.model.parameters()).device
+
     def to(self, device):
         self.model.to(device)
 
@@ -46,11 +50,11 @@ class DinoV2FeatureExtractor:
             image = [i.resize((518, 518), Image.LANCZOS) for i in image]
             image = [np.array(i.convert('RGB')).astype(np.float32) / 255 for i in image]
             image = [torch.from_numpy(i).permute(2, 0, 1).float() for i in image]
-            image = torch.stack(image).cuda()
+            image = torch.stack(image).to(self.device)
         else:
             raise ValueError(f"Unsupported type of image: {type(image)}")
         
-        image = self.transform(image).cuda()
+        image = self.transform(image).to(self.device)
         features = self.model(image, is_training=True)['x_prenorm']
         patchtokens = F.layer_norm(features, features.shape[-1:])
         return patchtokens
@@ -69,6 +73,10 @@ class DinoV3FeatureExtractor:
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
+    @property
+    def device(self) -> torch.device:
+        return self.model.device
+
     def to(self, device):
         self.model.to(device)
 
@@ -83,7 +91,14 @@ class DinoV3FeatureExtractor:
         hidden_states = self.model.embeddings(image, bool_masked_pos=None)
         position_embeddings = self.model.rope_embeddings(image)
 
-        for i, layer_module in enumerate(self.model.layer):
+        layers = getattr(self.model, 'layer', None) or getattr(getattr(self.model, 'model', None), 'layer', None) or getattr(getattr(self.model, 'encoder', None), 'layer', None)
+        if layers is None:
+            raise AttributeError(
+                "Cannot locate DINOv3 encoder layers: expected "
+                "self.model.layer, self.model.model.layer, or "
+                "self.model.encoder.layer"
+            )
+        for i, layer_module in enumerate(layers):
             hidden_states = layer_module(
                 hidden_states,
                 position_embeddings=position_embeddings,
@@ -109,10 +124,10 @@ class DinoV3FeatureExtractor:
             image = [i.resize((self.image_size, self.image_size), Image.LANCZOS) for i in image]
             image = [np.array(i.convert('RGB')).astype(np.float32) / 255 for i in image]
             image = [torch.from_numpy(i).permute(2, 0, 1).float() for i in image]
-            image = torch.stack(image).cuda()
+            image = torch.stack(image).to(self.device)
         else:
             raise ValueError(f"Unsupported type of image: {type(image)}")
         
-        image = self.transform(image).cuda()
+        image = self.transform(image).to(self.device)
         features = self.extract_features(image)
         return features
