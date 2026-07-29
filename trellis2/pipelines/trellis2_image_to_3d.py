@@ -76,7 +76,7 @@ class Trellis2ImageTo3DPipeline(Pipeline):
             'roughness': slice(4, 5),
             'alpha': slice(5, 6),
         }
-        self._device = 'cpu'
+        self._device = torch.device('cpu')
 
     @classmethod
     def from_pretrained(cls, path: str, config_file: str = "pipeline.json") -> "Trellis2ImageTo3DPipeline":
@@ -112,7 +112,7 @@ class Trellis2ImageTo3DPipeline(Pipeline):
             'roughness': slice(4, 5),
             'alpha': slice(5, 6),
         }
-        pipeline._device = 'cpu'
+        pipeline._device = torch.device('cpu')
 
         return pipeline
 
