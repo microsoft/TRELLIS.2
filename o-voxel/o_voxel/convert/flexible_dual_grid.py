@@ -1,7 +1,14 @@
 from typing import *
 import numpy as np
 import torch
-from .. import _C
+import platform
+
+_HAS_C = False
+try:
+    from .. import _C
+    _HAS_C = True
+except ImportError:
+    pass
 
 __all__ = [
     "mesh_to_flexible_dual_grid",
@@ -11,7 +18,7 @@ __all__ = [
 
 def _init_hashmap(grid_size, capacity, device):
     VOL = (grid_size[0] * grid_size[1] * grid_size[2]).item()
-        
+
     # If the number of elements in the tensor is less than 2^32, use uint32 as the hashmap type, otherwise use uint64.
     if VOL < 2**32:
         hashmap_keys = torch.full((capacity,), torch.iinfo(torch.uint32).max, dtype=torch.uint32, device=device)
@@ -21,8 +28,46 @@ def _init_hashmap(grid_size, capacity, device):
         raise ValueError(f"The spatial size is too large to fit in a hashmap. Get volumn {VOL} > 2^64.")
 
     hashmap_vals = torch.empty((capacity,), dtype=torch.uint32, device=device)
-    
+
     return hashmap_keys, hashmap_vals
+
+
+class _CPUHashMap:
+    """Pure PyTorch hashmap replacement for CUDA _C.hashmap_* functions."""
+
+    def __init__(self, grid_size, device='cpu'):
+        D, H, W = int(grid_size[0]), int(grid_size[1]), int(grid_size[2])
+        self.D, self.H, self.W = D, H, W
+        self.table_size = D * H * W
+        self.device = device
+        # Use int64 flat lookup table
+        self.lookup = torch.full((self.table_size,), -1, dtype=torch.long, device=device)
+
+    def _flat_key(self, coords_3d):
+        """coords_3d: (..., 3) int tensor of (x, y, z)"""
+        return (coords_3d[..., 0].long() * self.H * self.W +
+                coords_3d[..., 1].long() * self.W +
+                coords_3d[..., 2].long())
+
+    def insert(self, coords_4d):
+        """coords_4d: (N, 4) with [batch, x, y, z]. batch is ignored (assumed 0), value = row index."""
+        flat = self._flat_key(coords_4d[:, 1:4])
+        self.lookup[flat] = torch.arange(coords_4d.shape[0], dtype=torch.long, device=self.device)
+
+    def lookup_3d(self, coords_4d):
+        """coords_4d: (M, 4) with [batch, x, y, z]. Returns (M,) indices, 0xffffffff for missing."""
+        coords_3d = coords_4d[:, 1:4]
+        flat = self._flat_key(coords_3d)
+        # Bounds check
+        valid = ((coords_3d[..., 0] >= 0) & (coords_3d[..., 0] < self.D) &
+                 (coords_3d[..., 1] >= 0) & (coords_3d[..., 1] < self.H) &
+                 (coords_3d[..., 2] >= 0) & (coords_3d[..., 2] < self.W))
+        flat = flat.clamp(0, self.table_size - 1)
+        result = self.lookup[flat]
+        result[~valid] = -1
+        # Convert -1 to 0xffffffff for compatibility
+        result[result < 0] = 0xffffffff
+        return result
 
 
 @torch.no_grad()
@@ -113,7 +158,7 @@ def mesh_to_flexible_dual_grid(
             min_xyz -= padding * 0.5
             max_xyz += padding * 0.5
 
-        aabb = torch.stack([min_xyz, max_xyz], dim=0).float().cuda()
+        aabb = torch.stack([min_xyz, max_xyz], dim=0).float().to(vertices.device)
 
     # Fill voxel size or grid size
     if voxel_size is None:
@@ -222,8 +267,14 @@ def flexible_dual_grid_to_mesh(
     mesh_vertices = (coords.float() + dual_vertices) / (2 * N) - 0.5
 
     # Store active voxels into hashmap
-    hashmap = _init_hashmap(grid_size, 2 * N, device=coords.device)
-    _C.hashmap_insert_3d_idx_as_val_cuda(*hashmap, torch.cat([torch.zeros_like(coords[:, :1]), coords], dim=-1), *grid_size.tolist())
+    if _HAS_C and coords.is_cuda:
+        hashmap = _init_hashmap(grid_size, 2 * N, device=coords.device)
+        _C.hashmap_insert_3d_idx_as_val_cuda(*hashmap, torch.cat([torch.zeros_like(coords[:, :1]), coords], dim=-1), *grid_size.tolist())
+        _use_cpu_hashmap = False
+    else:
+        cpu_hashmap = _CPUHashMap(grid_size, device=coords.device)
+        cpu_hashmap.insert(torch.cat([torch.zeros_like(coords[:, :1]), coords], dim=-1))
+        _use_cpu_hashmap = True
 
     # Find connected voxels
     edge_neighbor_voxel = coords.reshape(N, 1, 1, 3) + flexible_dual_grid_to_mesh.edge_neighbor_voxel_offset      # (N, 3, 4, 3)
@@ -233,7 +284,10 @@ def flexible_dual_grid_to_mesh(
         torch.zeros((M * 4, 1), dtype=torch.int, device=coords.device),
         connected_voxel.reshape(-1, 3)
     ], dim=1)
-    connected_voxel_indices = _C.hashmap_lookup_3d_cuda(*hashmap, connected_voxel_hash_key, *grid_size.tolist()).reshape(M, 4).int()
+    if _use_cpu_hashmap:
+        connected_voxel_indices = cpu_hashmap.lookup_3d(connected_voxel_hash_key).reshape(M, 4).int()
+    else:
+        connected_voxel_indices = _C.hashmap_lookup_3d_cuda(*hashmap, connected_voxel_hash_key, *grid_size.tolist()).reshape(M, 4).int()
     connected_voxel_valid = (connected_voxel_indices != 0xffffffff).all(dim=1)
     quad_indices = connected_voxel_indices[connected_voxel_valid].int()                             # (L, 4)
     L = quad_indices.shape[0]
@@ -277,7 +331,7 @@ def flexible_dual_grid_to_mesh(
             split_weight_ws_13 * mean_v13
         ) / (split_weight_ws_02 + split_weight_ws_13)
         mesh_vertices = torch.cat([mesh_vertices, mid_vertices], dim=0)
-        quad_indices = torch.cat([quad_indices, torch.arange(N, N + L, device='cuda').unsqueeze(1)], dim=1)
+        quad_indices = torch.cat([quad_indices, torch.arange(N, N + L, device=coords.device).unsqueeze(1)], dim=1)
         mesh_triangles = quad_indices[:, flexible_dual_grid_to_mesh.quad_split_train].reshape(-1, 3)
     
     return mesh_vertices, mesh_triangles

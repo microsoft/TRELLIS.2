@@ -1,5 +1,6 @@
 from typing import *
 import torch
+import torch.nn.functional as F
 import math
 from .. import SparseTensor
 from .. import config
@@ -9,6 +10,97 @@ __all__ = [
     'sparse_windowed_scaled_dot_product_self_attention',
     'sparse_windowed_scaled_dot_product_cross_attention',
 ]
+
+
+def _sdpa_varlen_qkvpacked(qkv_feats: torch.Tensor, attn_func_args: dict) -> torch.Tensor:
+    """sdpa for variable-length qkv-packed input (self-attention within windows)."""
+    q, k, v = qkv_feats.unbind(dim=1)  # each [M, H, C]
+    cu_seqlens = attn_func_args['cu_seqlens']
+    seq_lens = attn_func_args['seq_lens']
+    N = len(seq_lens)
+    max_len = attn_func_args['max_seqlen'].item() if isinstance(attn_func_args['max_seqlen'], torch.Tensor) else attn_func_args['max_seqlen']
+    H, C = q.shape[-2], q.shape[-1]
+
+    # Pad into dense batch [N, max_len, H, C]
+    q_dense = q.new_zeros(N, max_len, H, C)
+    k_dense = k.new_zeros(N, max_len, H, C)
+    v_dense = v.new_zeros(N, max_len, H, C)
+    mask = torch.zeros(N, max_len, dtype=torch.bool, device=q.device)
+    for i in range(N):
+        sl = seq_lens[i].item() if isinstance(seq_lens[i], torch.Tensor) else seq_lens[i]
+        start = cu_seqlens[i].item()
+        q_dense[i, :sl] = q[start:start + sl]
+        k_dense[i, :sl] = k[start:start + sl]
+        v_dense[i, :sl] = v[start:start + sl]
+        mask[i, :sl] = True
+
+    # [N, H, L, C]
+    q_dense = q_dense.permute(0, 2, 1, 3)
+    k_dense = k_dense.permute(0, 2, 1, 3)
+    v_dense = v_dense.permute(0, 2, 1, 3)
+
+    # Build float mask for MPS compatibility
+    sdpa_mask = mask.unsqueeze(1).unsqueeze(2)  # [N, 1, 1, L]
+    float_mask = torch.zeros(N, 1, max_len, max_len, dtype=q_dense.dtype, device=q.device)
+    float_mask.masked_fill_(~(mask.unsqueeze(1).unsqueeze(2) & mask.unsqueeze(1).unsqueeze(3)), float('-inf'))
+
+    out_dense = F.scaled_dot_product_attention(q_dense, k_dense, v_dense, attn_mask=float_mask)
+    out_dense = out_dense.permute(0, 2, 1, 3)  # [N, L, H, C]
+
+    # Unpad
+    parts = []
+    for i in range(N):
+        sl = seq_lens[i].item() if isinstance(seq_lens[i], torch.Tensor) else seq_lens[i]
+        parts.append(out_dense[i, :sl])
+    return torch.cat(parts, dim=0)
+
+
+def _sdpa_varlen(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor,
+                 q_args: dict, kv_args: dict) -> torch.Tensor:
+    """sdpa for variable-length cross-attention within windows."""
+    q_cu = q_args['cu_seqlens']
+    kv_cu = kv_args['cu_seqlens']
+    q_seq_lens = q_args['seq_lens']
+    kv_seq_lens = kv_args['seq_lens']
+    N = len(q_seq_lens)
+    max_q = q_args['max_seqlen'].item() if isinstance(q_args['max_seqlen'], torch.Tensor) else q_args['max_seqlen']
+    max_kv = kv_args['max_seqlen'].item() if isinstance(kv_args['max_seqlen'], torch.Tensor) else kv_args['max_seqlen']
+    H, C_q = q.shape[-2], q.shape[-1]
+    C_v = v.shape[-1]
+
+    q_dense = q.new_zeros(N, max_q, H, C_q)
+    k_dense = k.new_zeros(N, max_kv, H, C_q)
+    v_dense = v.new_zeros(N, max_kv, H, C_v)
+    q_mask = torch.zeros(N, max_q, dtype=torch.bool, device=q.device)
+    kv_mask = torch.zeros(N, max_kv, dtype=torch.bool, device=q.device)
+    for i in range(N):
+        ql = q_seq_lens[i].item() if isinstance(q_seq_lens[i], torch.Tensor) else q_seq_lens[i]
+        kvl = kv_seq_lens[i].item() if isinstance(kv_seq_lens[i], torch.Tensor) else kv_seq_lens[i]
+        qs = q_cu[i].item()
+        kvs = kv_cu[i].item()
+        q_dense[i, :ql] = q[qs:qs + ql]
+        k_dense[i, :kvl] = k[kvs:kvs + kvl]
+        v_dense[i, :kvl] = v[kvs:kvs + kvl]
+        q_mask[i, :ql] = True
+        kv_mask[i, :kvl] = True
+
+    q_dense = q_dense.permute(0, 2, 1, 3)
+    k_dense = k_dense.permute(0, 2, 1, 3)
+    v_dense = v_dense.permute(0, 2, 1, 3)
+
+    # q_mask: (N, max_q), kv_mask: (N, max_kv) -> cross mask: (N, 1, max_q, max_kv)
+    cross_mask = q_mask.unsqueeze(2) & kv_mask.unsqueeze(1)  # (N, max_q, max_kv)
+    float_mask = torch.zeros(N, 1, max_q, max_kv, dtype=q_dense.dtype, device=q.device)
+    float_mask.masked_fill_(~cross_mask.unsqueeze(1), float('-inf'))
+
+    out_dense = F.scaled_dot_product_attention(q_dense, k_dense, v_dense, attn_mask=float_mask)
+    out_dense = out_dense.permute(0, 2, 1, 3)
+
+    parts = []
+    for i in range(N):
+        ql = q_seq_lens[i].item() if isinstance(q_seq_lens[i], torch.Tensor) else q_seq_lens[i]
+        parts.append(out_dense[i, :ql])
+    return torch.cat(parts, dim=0)
 
 
 def calc_window_partition(
@@ -59,6 +151,12 @@ def calc_window_partition(
         attn_func_args = {
             'cu_seqlens': torch.cat([torch.tensor([0], device=tensor.device), torch.cumsum(seq_lens, dim=0)], dim=0).int(),
             'max_seqlen': torch.max(seq_lens)
+        }
+    elif config.ATTN == 'sdpa':
+        attn_func_args = {
+            'cu_seqlens': torch.cat([torch.tensor([0], device=tensor.device), torch.cumsum(seq_lens, dim=0)], dim=0).int(),
+            'max_seqlen': torch.max(seq_lens),
+            'seq_lens': seq_lens,
         }
 
     return fwd_indices, bwd_indices, seq_lens, attn_func_args
@@ -113,6 +211,8 @@ def sparse_windowed_scaled_dot_product_self_attention(
         if 'flash_attn' not in globals():
             import flash_attn
         out = flash_attn.flash_attn_varlen_qkvpacked_func(qkv_feats, **attn_func_args)  # [M, H, C]
+    elif config.ATTN == 'sdpa':
+        out = _sdpa_varlen_qkvpacked(qkv_feats, attn_func_args)                         # [M, H, C]
 
     out = out[bwd_indices]      # [T, H, C]
 
@@ -172,11 +272,11 @@ def sparse_windowed_scaled_dot_product_cross_attention(
         if 'xops' not in globals():
             import xformers.ops as xops
         k, v = kv_feats.unbind(dim=1)                                                   # [M, H, C]
-        q = q.unsqueeze(0)                                                              # [1, M, H, C]
+        q_feats_u = q_feats.unsqueeze(0)                                                # [1, M, H, C]
         k = k.unsqueeze(0)                                                              # [1, M, H, C]
         v = v.unsqueeze(0)                                                              # [1, M, H, C]
         mask = xops.fmha.BlockDiagonalMask.from_seqlens(q_seq_lens, kv_seq_lens)
-        out = xops.memory_efficient_attention(q, k, v, attn_bias=mask)[0]               # [M, H, C]
+        out = xops.memory_efficient_attention(q_feats_u, k, v, attn_bias=mask)[0]       # [M, H, C]
     elif config.ATTN == 'flash_attn':
         if 'flash_attn' not in globals():
             import flash_attn
@@ -184,6 +284,9 @@ def sparse_windowed_scaled_dot_product_cross_attention(
             cu_seqlens_q=q_attn_func_args['cu_seqlens'], cu_seqlens_k=kv_attn_func_args['cu_seqlens'],
             max_seqlen_q=q_attn_func_args['max_seqlen'], max_seqlen_k=kv_attn_func_args['max_seqlen'],
         )  # [M, H, C]
+    elif config.ATTN == 'sdpa':
+        k, v = kv_feats.unbind(dim=1)
+        out = _sdpa_varlen(q_feats, k, v, q_attn_func_args, kv_attn_func_args)          # [M, H, C]
 
     out = out[q_bwd_indices]      # [T, H, C]
 

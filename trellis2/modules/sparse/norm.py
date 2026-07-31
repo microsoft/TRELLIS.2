@@ -12,12 +12,24 @@ __all__ = [
 ]
 
 
+def _zeros_like_safe(t: torch.Tensor) -> torch.Tensor:
+    """zeros_like equivalent that works around PyTorch MPS builds missing
+    fp16/fp32 zeros kernels (DispatchStub missing). Constructs zeros on CPU
+    and transfers — Apple Silicon unified memory makes the transfer a
+    metadata-only operation, so the overhead vs a true MPS zeros kernel is
+    negligible when it does exist."""
+    if t.device.type == 'mps':
+        cpu_zeros = torch.zeros(t.shape, dtype=t.dtype)
+        return cpu_zeros.to(t.device)
+    return torch.zeros_like(t)
+
+
 class SparseGroupNorm(nn.GroupNorm):
     def __init__(self, num_groups, num_channels, eps=1e-5, affine=True):
         super(SparseGroupNorm, self).__init__(num_groups, num_channels, eps, affine)
 
     def forward(self, input: VarLenTensor) -> VarLenTensor:
-        nfeats = torch.zeros_like(input.feats)
+        nfeats = _zeros_like_safe(input.feats)
         for k in range(input.shape[0]):
             bfeats = input.feats[input.layout[k]]
             bfeats = bfeats.permute(1, 0).reshape(1, input.shape[1], -1)
@@ -32,7 +44,7 @@ class SparseLayerNorm(nn.LayerNorm):
         super(SparseLayerNorm, self).__init__(normalized_shape, eps, elementwise_affine)
 
     def forward(self, input: VarLenTensor) -> VarLenTensor:
-        nfeats = torch.zeros_like(input.feats)
+        nfeats = _zeros_like_safe(input.feats)
         for k in range(input.shape[0]):
             bfeats = input.feats[input.layout[k]]
             bfeats = bfeats.permute(1, 0).reshape(1, input.shape[1], -1)

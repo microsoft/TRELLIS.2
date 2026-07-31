@@ -1,0 +1,5 @@
+# Verified Apple Silicon runtime pair. scripts/setup_macos.sh retries the
+# documented 2.11/0.26 ABI fallback only when the primary Metal build fails.
+torch==2.13.0
+torchvision==0.28.0
+-r requirements_macos_core.txt

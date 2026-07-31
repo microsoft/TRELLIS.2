@@ -1,7 +1,6 @@
 import torch
 from easydict import EasyDict as edict
 from ..representations import Voxel
-from easydict import EasyDict as edict
 
 
 class VoxelRenderer:
@@ -29,7 +28,7 @@ class VoxelRenderer:
             colors_overwrite: torch.Tensor = None
         ) -> edict:
         """
-        Render the gausssian.
+        Render the voxel.
 
         Args:
             voxel (Voxel): Voxel representation.

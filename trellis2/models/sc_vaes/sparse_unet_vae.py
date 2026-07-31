@@ -6,6 +6,17 @@ import torch.utils.checkpoint
 from ...modules.utils import convert_module_to_f16, convert_module_to_f32, zero_module
 from ...modules import sparse as sp
 from ...modules.norm import LayerNorm32
+from ...backends import fp32_decode_thresholds_enabled
+
+
+def _subdiv_logits(to_subdiv: nn.Linear, x: sp.SparseTensor) -> sp.SparseTensor:
+    # Subdivision is a hard `> 0` decision; fp16 GEMM accumulation can flip
+    # near-zero logits on non-CUDA backends (upstream #169), so optionally
+    # compute the logits themselves in fp32.
+    if fp32_decode_thresholds_enabled():
+        bias = to_subdiv.bias.float() if to_subdiv.bias is not None else None
+        return x.replace(F.linear(x.feats.float(), to_subdiv.weight.float(), bias))
+    return to_subdiv(x)
 
 
 class SparseResBlock3d(nn.Module):
@@ -66,7 +77,7 @@ class SparseResBlock3d(nn.Module):
     def _forward(self, x: sp.SparseTensor) -> sp.SparseTensor:
         subdiv = None
         if self.upsample:
-            subdiv = self.to_subdiv(x)
+            subdiv = _subdiv_logits(self.to_subdiv, x)
         h = x.replace(self.norm1(x.feats))
         h = h.replace(F.silu(h.feats))
         if self.resample_mode == 'spatial2channel':
@@ -153,7 +164,7 @@ class SparseResBlockUpsample3d(nn.Module):
 
     def _forward(self, x: sp.SparseTensor, subdiv: sp.SparseTensor = None) -> sp.SparseTensor:
         if self.pred_subdiv:
-            subdiv = self.to_subdiv(x)
+            subdiv = _subdiv_logits(self.to_subdiv, x)
         h = x.replace(self.norm1(x.feats))
         h = h.replace(F.silu(h.feats))
         subdiv_binarized = subdiv.replace(subdiv.feats > 0) if subdiv is not None else None
@@ -239,7 +250,7 @@ class SparseResBlockC2S3d(nn.Module):
 
     def _forward(self, x: sp.SparseTensor, subdiv: sp.SparseTensor = None) -> sp.SparseTensor:
         if self.pred_subdiv:
-            subdiv = self.to_subdiv(x)
+            subdiv = _subdiv_logits(self.to_subdiv, x)
         h = x.replace(self.norm1(x.feats))
         h = h.replace(F.silu(h.feats))
         h = self.conv1(h)
@@ -519,4 +530,3 @@ class SparseUnetVaeDecoder(nn.Module):
                     h, sub = block(h)
                 else:
                     h = block(h)
-       

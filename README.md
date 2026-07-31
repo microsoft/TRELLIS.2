@@ -15,6 +15,102 @@ https://github.com/user-attachments/assets/63b43a7e-acc7-4c81-a900-6da450527d8f
 **TRELLIS.2** is a state-of-the-art large 3D generative model (4B parameters) designed for high-fidelity **image-to-3D** generation. It leverages a novel "field-free" sparse voxel structure termed **O-Voxel** to reconstruct and generate arbitrary 3D assets with complex topologies, sharp features, and full PBR materials.
 
 
+## 🍎 Apple Silicon Fork
+
+This fork makes Apple Silicon a source-native backend instead of cloning and
+patching a second TRELLIS checkout. The supported end-to-end path is PyTorch
+MPS with capability-probed Metal extensions. MLX is included only as an
+experimental parity backend; the upstream CUDA/Linux path remains available.
+
+The implementation incorporates the source-native backend and parity work from
+[`trellis2-apple@6055b86`](https://github.com/pedronaugusto/trellis2-apple/commit/6055b868734af6e12769d229d90580e775fae9f0)
+and the MPS CLI/fallback lessons from
+[`trellis-mac@d58628f`](https://github.com/shivampkumar/trellis-mac/commit/d58628f4f5b9c3de8274cb110074154f4b31cef2).
+
+### macOS setup
+
+Requirements: Apple Silicon, Xcode, and Python 3.11. The setup script creates
+`.venv`, installs the matching Xcode Metal Toolchain when necessary, tries
+`torch==2.13.0` / `torchvision==0.28.0`, builds the pinned Metal extensions,
+then runs `pip check`, MPS, SDPA, MLX, KDTree, and Metal probes. If the primary
+pair fails its ABI probe, it rebuilds once with the prescribed
+`torch==2.11.0` / `torchvision==0.26.0` fallback.
+
+```sh
+git clone https://github.com/Jourloy/TRELLIS.2.git
+cd TRELLIS.2
+bash scripts/setup_macos.sh
+source .venv/bin/activate
+```
+
+The Metal sources are fixed to these commits:
+
+- `mtlgemm`: `867aec8234299a7fe1ede7f802c8debe5a939a82`
+- `mtldiffrast`: `4668cd91cb6d27f5e264731f94a06841fbf7aab8`
+- `mtlbvh`: `23f441c470ce1f537e1fd836f3ffb5b8245f7975`
+- `mtlmesh`: `212079e55772cff3d648a21372392c37e0643f3b`
+
+`SKIP_METAL=1 bash scripts/setup_macos.sh` installs the slower controlled
+fallback environment. No API or Gradio server is needed for the supported CLI.
+
+### Hugging Face access and offline cache
+
+TRELLIS.2-4B is public. DINOv3 and RMBG-2.0 are gated, so accept their terms
+and authenticate once before downloading all pinned inputs:
+
+```sh
+hf auth login
+python scripts/download_weights.py \
+  --cache-dir ~/.cache/trellis2/huggingface
+python scripts/download_weights.py \
+  --cache-dir ~/.cache/trellis2/huggingface --offline
+```
+
+Runtime revisions are fixed to TRELLIS.2-4B `af44b45`, DINOv3 `ea8dc28`,
+RMBG-2.0 `5df4c9c`, and the external TRELLIS image decoder `25e0d31`. Pass the
+same cache with `--cache-dir` and use `--offline` after the first download.
+
+### Reproducible generation
+
+```sh
+python scripts/generate_asset.py input.png \
+  --output-dir outputs/sample \
+  --backend auto \
+  --baker auto \
+  --pipeline-type 512 \
+  --seed 42 \
+  --texture-size 1024 \
+  --background auto \
+  --pbr-decimation-target none \
+  --cache-dir ~/.cache/trellis2/huggingface
+```
+
+`background=auto` runs official RMBG-2.0 for opaque images, while a prepared
+RGBA image with non-opaque alpha bypasses background removal. `background=keep`
+passes the image through unchanged.
+
+Every run writes:
+
+- `raw_full.glb`: untouched full-resolution geometry before PBR processing;
+- `candidate_pbr.glb`: UV0 and native base-color, metallic, roughness, and
+  alpha data;
+- `meta.json`: exact revisions, backend capabilities, seed, timings, hashes,
+  bounds, sizes, triangle counts, and every fallback attempt.
+
+There is no default triangle limit. PBR export first tries the complete mesh
+with Metal, then full-resolution KDTree baking. If both fail on a very large
+mesh, a separately recorded technical candidate near 200k faces is tried;
+`raw_full.glb` is never simplified. Set `TRELLIS_DISABLE_METAL=1` to exercise
+the pure-PyTorch sparse-convolution, SDPA, CPU mesh extraction, and KDTree
+fallback path explicitly.
+
+### Dependency licenses
+
+The repository code is MIT, but model dependencies have their own terms. In
+particular, review the DINOv3 license before use and note that RMBG-2.0 is
+distributed under CC BY-NC 4.0. These terms are documented here and are not
+enforced by an automatic runtime block.
+
 ## ✨ Features
 
 ### 1. High Quality, Resolution & Efficiency

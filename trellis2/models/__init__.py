@@ -1,4 +1,7 @@
 import importlib
+from typing import Optional
+
+from ..model_revisions import revision_for_repo
 
 __attributes = {
     # Sparse Structure
@@ -35,7 +38,14 @@ def __getattr__(name):
     return globals()[name]
 
 
-def from_pretrained(path: str, **kwargs):
+def from_pretrained(
+    path: str,
+    *,
+    revision: Optional[str] = None,
+    cache_dir: Optional[str] = None,
+    local_files_only: bool = False,
+    **kwargs,
+):
     """
     Load a model from a pretrained checkpoint.
 
@@ -57,8 +67,14 @@ def from_pretrained(path: str, **kwargs):
         path_parts = path.split('/')
         repo_id = f'{path_parts[0]}/{path_parts[1]}'
         model_name = '/'.join(path_parts[2:])
-        config_file = hf_hub_download(repo_id, f"{model_name}.json")
-        model_file = hf_hub_download(repo_id, f"{model_name}.safetensors")
+        revision = revision_for_repo(repo_id, revision)
+        hub_kwargs = {
+            "revision": revision,
+            "cache_dir": cache_dir,
+            "local_files_only": local_files_only,
+        }
+        config_file = hf_hub_download(repo_id, f"{model_name}.json", **hub_kwargs)
+        model_file = hf_hub_download(repo_id, f"{model_name}.safetensors", **hub_kwargs)
 
     with open(config_file, 'r') as f:
         config = json.load(f)

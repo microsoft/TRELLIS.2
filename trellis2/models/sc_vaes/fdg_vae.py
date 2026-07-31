@@ -17,6 +17,7 @@ from .sparse_unet_vae import (
     SparseUnetVaeDecoder,
 )
 from ...representations import Mesh
+from ...backends import fp32_decode_thresholds_enabled
 from o_voxel.convert import flexible_dual_grid_to_mesh
 
 
@@ -98,7 +99,10 @@ class FlexiDualGridVaeDecoder(SparseUnetVaeDecoder):
             out_list = list(decoded) if isinstance(decoded, tuple) else [decoded]
             h = out_list[0]
             vertices = h.replace((1 + 2 * self.voxel_margin) * F.sigmoid(h.feats[..., 0:3]) - self.voxel_margin)
-            intersected = h.replace(h.feats[..., 3:6] > 0)
+            intersected_logits = h.feats[..., 3:6]
+            if fp32_decode_thresholds_enabled():
+                intersected_logits = intersected_logits.float()
+            intersected = h.replace(intersected_logits > 0)
             quad_lerp = h.replace(F.softplus(h.feats[..., 6:7]))
             mesh = [Mesh(*flexible_dual_grid_to_mesh(
                 v.coords[:, 1:], v.feats, i.feats, q.feats,

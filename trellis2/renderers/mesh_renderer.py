@@ -3,6 +3,7 @@ import torch
 from easydict import EasyDict as edict
 from ..representations.mesh import Mesh, MeshWithVoxel, MeshWithPbrMaterial, TextureFilterMode, AlphaMode, TextureWrapMode
 import torch.nn.functional as F
+from ..backends import dr, RasterizeContext
 
 
 def intrinsics_to_projection(
@@ -41,9 +42,6 @@ class MeshRenderer:
         rendering_options (dict): Rendering options.
         """
     def __init__(self, rendering_options={}, device='cuda'):
-        if 'dr' not in globals():
-            import nvdiffrast.torch as dr
-        
         self.rendering_options = edict({
             "resolution": None,
             "near": None,
@@ -54,7 +52,7 @@ class MeshRenderer:
             "clamp_barycentric_coords": False,
         })
         self.rendering_options.update(rendering_options)
-        self.glctx = dr.RasterizeCudaContext(device=device)
+        self.glctx = RasterizeContext(device=device)
         self.device=device
         
     def render(
@@ -81,9 +79,6 @@ class MeshRenderer:
                 normal (torch.Tensor): [3, H, W] rendered normal image
                 mask (torch.Tensor): [H, W] rendered mask image
         """
-        if 'dr' not in globals():
-            import nvdiffrast.torch as dr
-            
         resolution = self.rendering_options["resolution"]
         near = self.rendering_options["near"]
         far = self.rendering_options["far"]
@@ -159,12 +154,11 @@ class MeshRenderer:
                     if antialias: img = dr.antialias(img, rast, vertices_clip, faces)
                 elif type == "attr":
                     if isinstance(mesh, MeshWithVoxel):
-                        if 'grid_sample_3d' not in globals():
-                            from flex_gemm.ops.grid_sample import grid_sample_3d
+                        from ..utils.grid_sample import grid_sample_3d as _grid_sample_3d
                         mask = rast[..., -1:] > 0
                         xyz = dr.interpolate(vertices, rast, faces)[0]
                         xyz = ((xyz - mesh.origin) / mesh.voxel_size).reshape(1, -1, 3)
-                        img = grid_sample_3d(
+                        img = _grid_sample_3d(
                             mesh.attrs,
                             torch.cat([torch.zeros_like(mesh.coords[..., :1]), mesh.coords], dim=-1),
                             mesh.voxel_shape,
@@ -290,12 +284,11 @@ class MeshRenderer:
                         img = dr.interpolate(vertices, rast, faces_chunk)[0]
                     elif type == "attr":
                         if isinstance(mesh, MeshWithVoxel):
-                            if 'grid_sample_3d' not in globals():
-                                from flex_gemm.ops.grid_sample import grid_sample_3d
+                            from ..utils.grid_sample import grid_sample_3d as _grid_sample_3d
                             mask = rast[..., -1:] > 0
                             xyz = dr.interpolate(vertices, rast, faces_chunk)[0]
                             xyz = ((xyz - mesh.origin) / mesh.voxel_size).reshape(1, -1, 3)
-                            img = grid_sample_3d(
+                            img = _grid_sample_3d(
                                 mesh.attrs,
                                 torch.cat([torch.zeros_like(mesh.coords[..., :1]), mesh.coords], dim=-1),
                                 mesh.voxel_shape,

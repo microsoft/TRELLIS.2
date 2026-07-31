@@ -5,6 +5,7 @@ import numpy as np
 import utils3d
 from ..representations.mesh import Mesh, MeshWithVoxel, MeshWithPbrMaterial, TextureFilterMode, AlphaMode, TextureWrapMode
 import torch.nn.functional as F
+from ..backends import dr, RasterizeContext
 
 
 def cube_to_dir(s, x, y):
@@ -18,12 +19,11 @@ def cube_to_dir(s, x, y):
 
 
 def latlong_to_cubemap(latlong_map, res):
-    if 'dr' not in globals():
-        import nvdiffrast.torch as dr
-    cubemap = torch.zeros(6, res[0], res[1], latlong_map.shape[-1], dtype=torch.float32, device='cuda')
+    device = latlong_map.device
+    cubemap = torch.zeros(6, res[0], res[1], latlong_map.shape[-1], dtype=torch.float32, device=device)
     for s in range(6):
-        gy, gx = torch.meshgrid(torch.linspace(-1.0 + 1.0 / res[0], 1.0 - 1.0 / res[0], res[0], device='cuda'), 
-                                torch.linspace(-1.0 + 1.0 / res[1], 1.0 - 1.0 / res[1], res[1], device='cuda'),
+        gy, gx = torch.meshgrid(torch.linspace(-1.0 + 1.0 / res[0], 1.0 - 1.0 / res[0], res[0], device=device),
+                                torch.linspace(-1.0 + 1.0 / res[1], 1.0 - 1.0 / res[1], res[1], device=device),
                                 indexing='ij')
         v = F.normalize(cube_to_dir(s, gx, gy), dim=-1)
 
@@ -53,8 +53,6 @@ class EnvMap:
         return self._backend.shade(gb_pos, gb_normal, kd, ks, view_pos, specular)
     
     def sample(self, directions: torch.Tensor):
-        if 'dr' not in globals():
-            import nvdiffrast.torch as dr
         return dr.texture(
             self._backend.base.unsqueeze(0),
             directions.unsqueeze(0),
@@ -195,9 +193,6 @@ class PbrMeshRenderer:
         rendering_options (dict): Rendering options.
         """
     def __init__(self, rendering_options={}, device='cuda'):
-        if 'dr' not in globals():
-            import nvdiffrast.torch as dr
-        
         self.rendering_options = edict({
             "resolution": None,
             "near": None,
@@ -206,7 +201,7 @@ class PbrMeshRenderer:
             "peel_layers": 8,
         })
         self.rendering_options.update(rendering_options)
-        self.glctx = dr.RasterizeCudaContext(device=device)
+        self.glctx = RasterizeContext(device=device)
         self.device=device
         
     def render(
@@ -237,9 +232,6 @@ class PbrMeshRenderer:
                 metallic (torch.Tensor): [H, W] metallic image
                 roughness (torch.Tensor): [H, W] roughness image
         """
-        if 'dr' not in globals():
-            import nvdiffrast.torch as dr
-            
         if not isinstance(envmap, dict):
             envmap = {'' : envmap}
         num_envmaps = len(envmap)
@@ -322,12 +314,11 @@ class PbrMeshRenderer:
                 
                 # PBR attributes
                 if isinstance(mesh, MeshWithVoxel):
-                    if 'grid_sample_3d' not in globals():
-                        from flex_gemm.ops.grid_sample import grid_sample_3d
+                    from ..utils.grid_sample import grid_sample_3d as _grid_sample_3d
                     mask = rast[..., -1:] > 0
                     xyz = dr.interpolate(vertices_orig, rast, faces)[0]
                     xyz = ((xyz - mesh.origin) / mesh.voxel_size).reshape(1, -1, 3)
-                    img = grid_sample_3d(
+                    img = _grid_sample_3d(
                         mesh.attrs,
                         torch.cat([torch.zeros_like(mesh.coords[..., :1]), mesh.coords], dim=-1),
                         mesh.voxel_shape,

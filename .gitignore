@@ -205,3 +205,25 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# macOS
+.DS_Store
+
+# Model weights
+weights/
+
+# CoreML exported models
+export/coreml_models/
+
+# Generated output
+output/
+
+# Debug scripts (dev-only)
+debug_*.py
+
+# pyenv
+.python-version
+
+# Gradio cache
+gradio_cache/
+gradio_cache_test/

@@ -9,10 +9,12 @@ from . import samplers, rembg
 from ..modules.sparse import SparseTensor
 from ..modules import image_feature_extractor
 import o_voxel
-import cumesh
-import nvdiffrast.torch as dr
 import cv2
-import flex_gemm
+from ..utils.grid_sample import grid_sample_3d as _grid_sample_3d
+
+from ..backends import dr, RasterizeContext, MeshBackend as _MeshBackend
+if dr is None or _MeshBackend is None:
+    raise ImportError("cumesh + mtldiffrast (macOS) or cumesh + nvdiffrast (CUDA) required")
 
 
 class Trellis2TexturingPipeline(Pipeline):
@@ -66,15 +68,24 @@ class Trellis2TexturingPipeline(Pipeline):
         self._device = 'cpu'
 
     @classmethod
-    def from_pretrained(cls, path: str, config_file: str = "pipeline.json") -> "Trellis2TexturingPipeline":
+    def from_pretrained(
+        cls,
+        path: str,
+        config_file: str = "pipeline.json",
+        **hub_kwargs,
+    ) -> "Trellis2TexturingPipeline":
         """
         Load a pretrained model.
 
         Args:
             path (str): The path to the model. Can be either local path or a Hugging Face repository.
         """
-        pipeline = super().from_pretrained(path, config_file)
+        pipeline = super().from_pretrained(path, config_file, **hub_kwargs)
         args = pipeline._pretrained_args
+        dependency_hub_kwargs = {
+            "cache_dir": hub_kwargs.get("cache_dir"),
+            "local_files_only": hub_kwargs.get("local_files_only", False),
+        }
 
         pipeline.tex_slat_sampler = getattr(samplers, args['tex_slat_sampler']['name'])(**args['tex_slat_sampler']['args'])
         pipeline.tex_slat_sampler_params = args['tex_slat_sampler']['params']
@@ -82,8 +93,14 @@ class Trellis2TexturingPipeline(Pipeline):
         pipeline.shape_slat_normalization = args['shape_slat_normalization']
         pipeline.tex_slat_normalization = args['tex_slat_normalization']
 
-        pipeline.image_cond_model = getattr(image_feature_extractor, args['image_cond_model']['name'])(**args['image_cond_model']['args'])
-        pipeline.rembg_model = getattr(rembg, args['rembg_model']['name'])(**args['rembg_model']['args'])
+        pipeline.image_cond_model = getattr(image_feature_extractor, args['image_cond_model']['name'])(
+            **args['image_cond_model']['args'],
+            **dependency_hub_kwargs,
+        )
+        pipeline.rembg_model = getattr(rembg, args['rembg_model']['name'])(
+            **args['rembg_model']['args'],
+            **dependency_hub_kwargs,
+        )
 
         pipeline.low_vram = args.get('low_vram', True)
         pipeline.pbr_attr_layout = {
@@ -117,7 +134,7 @@ class Trellis2TexturingPipeline(Pipeline):
         vertices[:, 1] = -vertices[:, 2]
         vertices[:, 2] = tmp
         assert np.all(vertices >= -0.5) and np.all(vertices <= 0.5), 'vertices out of range'
-        return trimesh.Trimesh(vertices=vertices, faces=mesh.faces, process=False)
+        return trimesh.Trimesh(vertices=vertices, faces=mesh.faces, process=False, visual=mesh.visual)
 
     def preprocess_image(self, input: Image.Image) -> Image.Image:
         """
@@ -291,29 +308,29 @@ class Trellis2TexturingPipeline(Pipeline):
         resolution: int = 1024,
         texture_size: int = 1024,
     ) -> trimesh.Trimesh:
-        vertices = mesh.vertices
-        faces = mesh.faces
-        normals = mesh.vertex_normals
-        vertices_torch = torch.from_numpy(vertices).float().cuda()
-        faces_torch = torch.from_numpy(faces).int().cuda()
+        vertices = np.array(mesh.vertices)
+        faces = np.array(mesh.faces)
+        normals = np.array(mesh.vertex_normals)
+        vertices_torch = torch.from_numpy(vertices).float().to(self.device)
+        faces_torch = torch.from_numpy(faces).int().to(self.device)
         if hasattr(mesh, 'visual') and hasattr(mesh.visual, 'uv') and mesh.visual.uv is not None:
             uvs = mesh.visual.uv.copy()
             uvs[:, 1] = 1 - uvs[:, 1]
-            uvs_torch = torch.from_numpy(uvs).float().cuda()
+            uvs_torch = torch.from_numpy(uvs).float().to(self.device)
         else:
-            _cumesh = cumesh.CuMesh()
-            _cumesh.init(vertices_torch, faces_torch)
-            vertices_torch, faces_torch, uvs_torch, vmap = _cumesh.uv_unwrap(return_vmaps=True)
-            vertices_torch = vertices_torch.cuda()
-            faces_torch = faces_torch.cuda()
-            uvs_torch = uvs_torch.cuda()
+            _mesh_op = _MeshBackend()
+            _mesh_op.init(vertices_torch, faces_torch)
+            vertices_torch, faces_torch, uvs_torch, vmap = _mesh_op.uv_unwrap(return_vmaps=True)
+            vertices_torch = vertices_torch.to(self.device)
+            faces_torch = faces_torch.to(self.device)
+            uvs_torch = uvs_torch.to(self.device)
             vertices = vertices_torch.cpu().numpy()
             faces = faces_torch.cpu().numpy()
             uvs = uvs_torch.cpu().numpy()
             normals = normals[vmap.cpu().numpy()]
                 
         # rasterize
-        ctx = dr.RasterizeCudaContext()
+        ctx = RasterizeContext()
         uvs_torch = torch.cat([uvs_torch * 2 - 1, torch.zeros_like(uvs_torch[:, :1]), torch.ones_like(uvs_torch[:, :1])], dim=-1).unsqueeze(0)
         rast, _ = dr.rasterize(
             ctx, uvs_torch, faces_torch,
@@ -323,7 +340,7 @@ class Trellis2TexturingPipeline(Pipeline):
         pos = dr.interpolate(vertices_torch.unsqueeze(0), rast, faces_torch)[0][0]
         
         attrs = torch.zeros(texture_size, texture_size, pbr_voxel.shape[1], device=self.device)
-        attrs[mask] = flex_gemm.ops.grid_sample.grid_sample_3d(
+        attrs[mask] = _grid_sample_3d(
             pbr_voxel.feats,
             pbr_voxel.coords,
             shape=torch.Size([*pbr_voxel.shape, *pbr_voxel.spatial_shape]),

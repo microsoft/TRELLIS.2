@@ -1,6 +1,9 @@
-from typing import *
+import platform
+from typing import Literal
 
-BACKEND = 'flash_attn' 
+# flash-attn is a CUDA-only optional dependency. Keep the upstream CUDA
+# default, while making SDPA the source-native dense-attention path on macOS.
+BACKEND = 'sdpa' if platform.system() == 'Darwin' else 'flash_attn'
 DEBUG = False
 
 def __from_env():
@@ -23,7 +26,9 @@ def __from_env():
 __from_env()
     
 
-def set_backend(backend: Literal['xformers', 'flash_attn']):
+def set_backend(
+    backend: Literal['xformers', 'flash_attn', 'flash_attn_3', 'sdpa', 'naive'],
+):
     global BACKEND
     BACKEND = backend
 
