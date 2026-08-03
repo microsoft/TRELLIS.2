@@ -54,10 +54,9 @@ RUN python3 -m pip install \
         torch==2.6.0 torchvision==0.21.0 \
         --index-url https://download.pytorch.org/whl/cu124 \
     && python3 -m pip install \
-        imageio imageio-ffmpeg tqdm easydict opencv-python-headless==4.10.0.84 ninja trimesh \
+        imageio imageio-ffmpeg tqdm easydict opencv-python-headless==4.10.0.84 Pillow==9.5.0 ninja trimesh \
         transformers gradio==6.0.1 tensorboard pandas lpips zstandard \
         kornia timm \
-    && python3 -m pip install pillow-simd \
     && python3 -m pip install git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8 \
     && python3 -m pip install flash-attn==2.7.3 --no-build-isolation \
     && git clone --depth 1 --branch v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast \
@@ -70,11 +69,6 @@ RUN python3 -m pip install \
     && python3 -m pip install /tmp/flexgemm --no-build-isolation \
     && python3 -m pip install ./o-voxel --no-build-isolation \
     && rm -rf /tmp/nvdiffrast /tmp/nvdiffrec /tmp/cumesh /tmp/flexgemm
-
-# Gradio 6.0.1 requires Pillow 9.5's WebP API. The upstream pillow-simd step
-# overlays Pillow rather than replacing it, so cleanly replace both packages.
-RUN python3 -m pip uninstall -y Pillow pillow-simd \
-    && python3 -m pip install Pillow==9.5.0
 
 COPY . /workspace
 
