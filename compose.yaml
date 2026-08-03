@@ -1,0 +1,30 @@
+services:
+  trellis2:
+    build:
+      context: .
+      args:
+        # RTX 4090 (Ada) compute capability. Keeping this precise reduces
+        # extension build time and image size.
+        TORCH_CUDA_ARCH_LIST: "8.9"
+        MAX_JOBS: "4"
+    image: trellis2:cuda12.4
+    gpus: all
+    ports:
+      - "7860:7860"
+    environment:
+      GRADIO_SERVER_NAME: 0.0.0.0
+      GRADIO_SERVER_PORT: "7860"
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+      HF_HOME: /models/huggingface
+      OPENCV_IO_ENABLE_OPENEXR: "1"
+      # Read from the host shell; never put a token directly in this file.
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      # Code is mounted for easy iteration. Remove this line to run precisely
+      # the source snapshot baked into the image.
+      - .:/workspace
+      # Checkpoints download here on first launch and survive container rebuilds.
+      - ./models:/models
+      - ./outputs:/workspace/outputs
+    shm_size: 8gb
+    command: python3 app.py

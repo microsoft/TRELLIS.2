@@ -1,0 +1,17 @@
+.git
+.github
+.gitignore
+.dockerignore
+Dockerfile
+compose.yaml
+README.md
+.venv
+__pycache__
+*.py[cod]
+*.egg-info
+build
+dist
+models
+outputs
+*.mp4
+*.glb
