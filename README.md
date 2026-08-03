@@ -99,6 +99,58 @@ Data processing is streamlined for instant conversions that are fully **renderin
         --nvdiffrec             Install nvdiffrec
     ```
 
+### Docker (NVIDIA GPU)
+
+The included Docker image installs the same CUDA 12.4 / PyTorch 2.6 dependency
+stack as `setup.sh`, including all required CUDA extensions. It is configured
+for an RTX 4090 (compute capability 8.9).
+
+The host requires Docker, NVIDIA Container Toolkit, and a driver compatible
+with CUDA 12.4. The build compiles several CUDA extensions, so ensure the
+Docker data directory has at least 25 GiB free (in addition to space for model
+weights). Check this with `docker info --format '{{.DockerRootDir}}'` and
+`df -h <that-directory>`. Build the image once:
+
+```sh
+docker compose build
+```
+
+Start the image-to-3D demo and open <http://localhost:7860>:
+
+```sh
+docker compose up
+```
+
+Model weights are downloaded from Hugging Face on first start into `./models/`
+and are reused across containers. Generated files can be written to
+`./outputs/`. To run a command such as the minimal example instead of the web
+demo:
+
+```sh
+docker compose run --rm trellis2 python3 example.py
+```
+
+To use a Hugging Face access token without saving it in the repository, export
+it in the shell that starts Compose:
+
+```sh
+export HF_TOKEN=hf_your_token_here
+docker compose up
+```
+
+TRELLIS.2 also downloads the gated DINOv3 image encoder. Before the first run,
+sign in to Hugging Face with the account that owns `HF_TOKEN` and accept the
+access conditions at
+[`facebook/dinov3-vitl16-pretrain-lvd1689m`](https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m).
+The token needs read access to that model.
+
+The image uses `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to reduce
+allocation fragmentation. TRELLIS.2 officially requires at least 24 GB of GPU
+memory; a 24 GB RTX 4090 meets that minimum, although high resolutions or an
+active graphical desktop can still cause an out-of-memory error. Begin at
+512³, close other GPU-intensive programs, and increase the resolution only
+after a successful run.
+
 ## 📦 Pretrained Weights
 
 The pretrained model **TRELLIS.2-4B** is available on Hugging Face. Please refer to the model card there for more details.
