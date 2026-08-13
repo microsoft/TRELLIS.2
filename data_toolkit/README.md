@@ -69,15 +69,15 @@ python data_toolkit/dump_mesh.py <SUBSET> --root <ROOT> [--rank <RANK> --world_s
 # Dump PBR Textures
 python data_toolkit/dump_pbr.py <SUBSET> --root <ROOT> [--rank <RANK> --world_size <WORLD_SIZE>]
 
-# Get statisitics of the asset
-python asset_stats.py --root <ROOT> [--rank <RANK> --world_size <WORLD_SIZE>]
+# Get statistics of the asset
+python data_toolkit/asset_stats.py --root <ROOT> [--rank <RANK> --world_size <WORLD_SIZE>]
 ```
 
 **Example:**
 ```bash
 python data_toolkit/dump_mesh.py ObjaverseXL --root datasets/ObjaverseXL_sketchfab
 python data_toolkit/dump_pbr.py ObjaverseXL --root datasets/ObjaverseXL_sketchfab
-python asset_stats.py --root datasets/ObjaverseXL_sketchfab
+python data_toolkit/asset_stats.py --root datasets/ObjaverseXL_sketchfab
 ```
 
 **Update Metadata:**
@@ -97,7 +97,7 @@ python data_toolkit/voxelize_pbr.py <SUBSET> --root <ROOT> [--rank <RANK> --worl
 ```
 
 **Arguments:**
-- `RESOLUTION`: Target resolutions for O-Voxels, comma-separated (e.g., `256,512,1024`). Default is `256`.
+- `RESOLUTION`: Target resolutions for O-Voxels, comma-separated (e.g., `256,512,1024`). Default is `256` for `dual_grid.py` and `1024` for `voxelize_pbr.py`.
 
 **Example:**
 Convert `ObjaverseXL` to resolutions 256, 512, and 1024:
@@ -155,11 +155,11 @@ Render multi-view images to train the image-conditioned generator.
 *Note: This process may utilize the CPU.*
 
 ```bash
-python data_toolkit/render_cond.py <SUBSET> --root <ROOT> [--num_views <NUM_VIEWS>] [--rank <RANK> --world_size <WORLD_SIZE>]
+python data_toolkit/render_cond.py <SUBSET> --root <ROOT> [--num_cond_views <NUM_COND_VIEWS>] [--rank <RANK> --world_size <WORLD_SIZE>]
 ```
 
 **Arguments:**
-- `NUM_VIEWS`: Number of views to render per asset. Default is `16`.
+- `NUM_COND_VIEWS`: Number of views to render per asset. Default is `16`.
 
 **Example:**
 ```bash
