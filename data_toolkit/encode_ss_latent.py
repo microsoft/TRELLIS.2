@@ -34,7 +34,7 @@ if __name__ == '__main__':
                         help='Filter objects with aesthetic score lower than this value')
     parser.add_argument('--resolution', type=int, default=64,
                         help='Sparse voxel resolution')
-    parser.add_argument('--shape_latent_name', type=str, default=None,
+    parser.add_argument('--shape_latent_name', type=str, required=True,
                         help='Name of the shape latent files')
     parser.add_argument('--enc_pretrained', type=str, default='microsoft/TRELLIS-image-large/ckpts/ss_enc_conv3d_16l8_fp16',
                         help='Pretrained encoder model')
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     records = []
     
     # filter out objects that are already processed
-    sha256_list = os.listdir(os.path.join(opt.ss_latent_root, 'ss_latents'))
+    sha256_list = os.listdir(os.path.join(opt.ss_latent_root, 'ss_latents', latent_name))
     sha256_list = [os.path.splitext(f)[0] for f in sha256_list if f.endswith('.npz')]
     for sha256 in sha256_list:
         records.append({'sha256': sha256, 'ss_latent_encoded': True})
