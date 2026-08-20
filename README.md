@@ -111,6 +111,8 @@ This fork includes a pip-first Windows path for Python 3.13, CUDA Toolkit 13.0, 
 
     On Windows, TRELLIS.2 does not require `flash-attn`: at startup it probes whether `flash_attn` is installed and actually runs on your GPU, and automatically falls back to PyTorch SDPA if it's missing or fails. If you install a working `flash-attn` build, it will be used automatically; you can still force a specific backend with `ATTN_BACKEND` or `SPARSE_ATTN_BACKEND` (`xformers`, `flash_attn`, `flash_attn_3`, `sdpa`, `naive`).
 
+    This fork's `requirements.txt` pins `cumesh` to the `windows-py313-cuda13` branch of [rwfsmith/CuMesh](https://github.com/rwfsmith/CuMesh), which includes a fix for an out-of-bounds GPU memory read in the narrow-band dual contouring remesh kernel. That bug caused `o_voxel.postprocess.to_glb(..., remesh=True)` (used by `extract_glb()` in `app.py`) to non-deterministically produce shredded/spiky meshes — the same code and latents could produce a clean or corrupted mesh from run to run. If you see corrupted GLB exports, make sure you're building against this branch (or a release that includes commit `ea33f2b` or later).
+
 4. Log in to Hugging Face before running the pretrained model. TRELLIS.2 loads gated dependencies, including `facebook/dinov3-vitl16-pretrain-lvd1689m`, so your account must have access:
     ```powershell
     huggingface-cli login
