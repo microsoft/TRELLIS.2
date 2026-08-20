@@ -1,9 +1,18 @@
 from typing import *
 import platform
+from .._attn_probe import flash_attn_usable
 
 CONV = 'flex_gemm' 
 DEBUG = False
-ATTN = 'sdpa' if platform.system() == 'Windows' else 'flash_attn'
+
+
+def _default_attn_backend() -> str:
+    if platform.system() == 'Windows':
+        return 'flash_attn' if flash_attn_usable() else 'sdpa'
+    return 'flash_attn'
+
+
+ATTN = _default_attn_backend()
 
 def __from_env():
     import os

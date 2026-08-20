@@ -1,7 +1,15 @@
 from typing import *
 import platform
+from .._attn_probe import flash_attn_usable
 
-BACKEND = 'sdpa' if platform.system() == 'Windows' else 'flash_attn'
+
+def _default_backend() -> str:
+    if platform.system() == 'Windows':
+        return 'flash_attn' if flash_attn_usable() else 'sdpa'
+    return 'flash_attn'
+
+
+BACKEND = _default_backend()
 DEBUG = False
 
 def __from_env():
