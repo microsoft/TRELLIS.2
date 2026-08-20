@@ -103,6 +103,12 @@ This fork includes a pip-first Windows path for Python 3.13, CUDA Toolkit 13.0, 
     setup_windows.bat -Python .\venv\Scripts\python.exe
     ```
 
+    Alternatively, a pure Python setup script is provided for those who prefer not to invoke PowerShell or a `.bat` file at all:
+    ```
+    python setup_windows.py --python .\venv\Scripts\python.exe
+    ```
+    It performs the same steps as `setup_windows.ps1` (locate VS2022 build tools, set `CUDA_HOME`/`TORCH_CUDA_ARCH_LIST`, then `pip install -r requirements.txt --no-build-isolation`). Use `--cuda-home` and `--torch-cuda-arch-list` to override the CUDA path or target GPU architecture.
+
     On Windows, TRELLIS.2 defaults to PyTorch SDPA for dense and sparse attention so `flash-attn` is not required. You can still override attention with `ATTN_BACKEND` or `SPARSE_ATTN_BACKEND`.
 
 4. Log in to Hugging Face before running the pretrained model. TRELLIS.2 loads gated dependencies, including `facebook/dinov3-vitl16-pretrain-lvd1689m`, so your account must have access:
