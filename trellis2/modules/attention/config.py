@@ -1,6 +1,7 @@
 from typing import *
+import platform
 
-BACKEND = 'flash_attn' 
+BACKEND = 'sdpa' if platform.system() == 'Windows' else 'flash_attn'
 DEBUG = False
 
 def __from_env():

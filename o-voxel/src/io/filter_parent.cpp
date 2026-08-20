@@ -80,7 +80,7 @@ torch::Tensor encode_sparse_voxel_octree_attr_parent_cpu(
     uint8_t* octree_data = octree.data_ptr<uint8_t>();
     uint8_t* attr_data = attr.data_ptr<uint8_t>();
 
-    torch::Tensor delta = torch::zeros({N_leaf, C}, torch::kUInt8);
+    torch::Tensor delta = torch::zeros({static_cast<int64_t>(N_leaf), static_cast<int64_t>(C)}, torch::kUInt8);
     uint32_t svo_ptr = 0;
     uint32_t attr_ptr = 0;
     uint32_t delta_ptr = C;
@@ -151,7 +151,7 @@ torch::Tensor decode_sparse_voxel_octree_attr_parent_cpu(
     uint8_t* octree_data = octree.data_ptr<uint8_t>();
     uint8_t* delta_data = delta.data_ptr<uint8_t>();
 
-    torch::Tensor attr = torch::zeros({N_leaf, C}, torch::kUInt8);
+    torch::Tensor attr = torch::zeros({static_cast<int64_t>(N_leaf), static_cast<int64_t>(C)}, torch::kUInt8);
     uint32_t svo_ptr = 0;
     uint32_t attr_ptr = 0;
     uint32_t delta_ptr = C;

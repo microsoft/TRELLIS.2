@@ -11,6 +11,22 @@ __all__ = [
 ]
 
 
+def _sdpa_varlen(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, q_seq_lens: torch.Tensor, kv_seq_lens: torch.Tensor) -> torch.Tensor:
+    out = []
+    q_start = 0
+    kv_start = 0
+    for q_len_tensor, kv_len_tensor in zip(q_seq_lens, kv_seq_lens):
+        q_len = int(q_len_tensor.item())
+        kv_len = int(kv_len_tensor.item())
+        q_slice = q[q_start:q_start + q_len].transpose(0, 1).unsqueeze(0)
+        k_slice = k[kv_start:kv_start + kv_len].transpose(0, 1).unsqueeze(0)
+        v_slice = v[kv_start:kv_start + kv_len].transpose(0, 1).unsqueeze(0)
+        out.append(torch.nn.functional.scaled_dot_product_attention(q_slice, k_slice, v_slice).squeeze(0).transpose(0, 1))
+        q_start += q_len
+        kv_start += kv_len
+    return torch.cat(out, dim=0)
+
+
 def calc_window_partition(
     tensor: SparseTensor,
     window_size: Union[int, Tuple[int, ...]],
@@ -60,6 +76,8 @@ def calc_window_partition(
             'cu_seqlens': torch.cat([torch.tensor([0], device=tensor.device), torch.cumsum(seq_lens, dim=0)], dim=0).int(),
             'max_seqlen': torch.max(seq_lens)
         }
+    elif config.ATTN == 'sdpa':
+        attn_func_args = {}
 
     return fwd_indices, bwd_indices, seq_lens, attn_func_args
     
@@ -113,6 +131,9 @@ def sparse_windowed_scaled_dot_product_self_attention(
         if 'flash_attn' not in globals():
             import flash_attn
         out = flash_attn.flash_attn_varlen_qkvpacked_func(qkv_feats, **attn_func_args)  # [M, H, C]
+    elif config.ATTN == 'sdpa':
+        q, k, v = qkv_feats.unbind(dim=1)
+        out = _sdpa_varlen(q, k, v, seq_lens, seq_lens)
 
     out = out[bwd_indices]      # [T, H, C]
 
@@ -184,6 +205,9 @@ def sparse_windowed_scaled_dot_product_cross_attention(
             cu_seqlens_q=q_attn_func_args['cu_seqlens'], cu_seqlens_k=kv_attn_func_args['cu_seqlens'],
             max_seqlen_q=q_attn_func_args['max_seqlen'], max_seqlen_k=kv_attn_func_args['max_seqlen'],
         )  # [M, H, C]
+    elif config.ATTN == 'sdpa':
+        k, v = kv_feats.unbind(dim=1)
+        out = _sdpa_varlen(q_feats, k, v, q_seq_lens, kv_seq_lens)
 
     out = out[q_bwd_indices]      # [T, H, C]
 

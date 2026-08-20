@@ -1,0 +1,33 @@
+--extra-index-url https://download.pytorch.org/whl/cu130
+
+torch==2.13.0+cu130
+torchvision==0.28.0+cu130
+numpy<2.3.0,>=2
+pillow
+imageio
+imageio-ffmpeg
+tqdm
+easydict
+opencv-python-headless==4.12.0.88
+ninja
+trimesh
+transformers
+gradio==6.0.1
+tensorboard
+pandas
+lpips
+zstandard
+kornia
+timm
+safetensors
+huggingface_hub
+requests
+plyfile
+matplotlib
+triton-windows
+utils3d @ git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
+nvdiffrast @ git+https://github.com/NVlabs/nvdiffrast.git@v0.4.0
+nvdiffrec_render @ git+https://github.com/JeffreyXiang/nvdiffrec.git@renderutils
+cumesh @ git+https://github.com/rwfsmith/CuMesh.git@windows-py313-cuda13
+flex_gemm @ git+https://github.com/rwfsmith/FlexGEMM.git@windows-py313-cuda13
+./o-voxel

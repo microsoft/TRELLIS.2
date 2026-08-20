@@ -64,6 +64,54 @@ Data processing is streamlined for instant conversions that are fully **renderin
   - Python version 3.8 or higher is required. 
 
 ### Installation Steps
+
+#### Windows (Python 3.13 + RTX 50-series / Blackwell)
+This fork includes a pip-first Windows path for Python 3.13, CUDA Toolkit 13.0, PyTorch `2.13.0+cu130`, and NVIDIA RTX 50-series / Blackwell GPUs (`sm_120`). Conda is not required.
+
+1. Clone the repo and initialize submodules:
+    ```powershell
+    git clone -b windows-blackwell https://github.com/rwfsmith/TRELLIS.2.git --recursive
+    cd TRELLIS.2
+    git submodule update --init --recursive
+    ```
+
+2. Create and activate a Python 3.13 virtual environment:
+    ```powershell
+    py -3.13 -m venv venv
+    .\venv\Scripts\Activate.ps1
+    python -m pip install --upgrade pip setuptools wheel
+    ```
+
+3. Install Visual Studio 2022 C++ build tools and CUDA Toolkit 13.0. Then install dependencies:
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1 -Python .\venv\Scripts\python.exe
+    ```
+    The setup script wraps:
+    ```powershell
+    python -m pip install -r requirements.txt --no-build-isolation
+    ```
+    and sets the native build environment variables needed by PyTorch CUDA extensions:
+    `CUDA_HOME`, `TORCH_CUDA_ARCH_LIST=12.0`, `DISTUTILS_USE_SDK=1`, and `MSSdk=1`.
+
+    If CUDA is installed somewhere other than `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0`, pass it explicitly:
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1 -Python .\venv\Scripts\python.exe -CudaHome "D:\CUDA\v13.0"
+    ```
+
+    On Windows, TRELLIS.2 defaults to PyTorch SDPA for dense and sparse attention so `flash-attn` is not required. You can still override attention with `ATTN_BACKEND` or `SPARSE_ATTN_BACKEND`.
+
+4. Log in to Hugging Face before running the pretrained model. TRELLIS.2 loads gated dependencies, including `facebook/dinov3-vitl16-pretrain-lvd1689m`, so your account must have access:
+    ```powershell
+    huggingface-cli login
+    ```
+
+5. Run the full image-to-3D example:
+    ```powershell
+    python example.py
+    ```
+    A successful run writes `sample.mp4` and `sample.glb`.
+
+#### Linux
 1. Clone the repo:
     ```sh
     git clone -b main https://github.com/microsoft/TRELLIS.2.git --recursive
@@ -101,7 +149,7 @@ Data processing is streamlined for instant conversions that are fully **renderin
 
 ## 📦 Pretrained Weights
 
-The pretrained model **TRELLIS.2-4B** is available on Hugging Face. Please refer to the model card there for more details.
+The pretrained model **TRELLIS.2-4B** is available on Hugging Face. Please refer to the model card there for more details. The image encoder dependency `facebook/dinov3-vitl16-pretrain-lvd1689m` is gated on Hugging Face; authenticate with an account that has access before running the example or web demo.
 
 | Model | Parameters | Resolution | Link |
 | :--- | :--- | :--- | :--- |

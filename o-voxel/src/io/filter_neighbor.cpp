@@ -77,7 +77,7 @@ torch::Tensor encode_sparse_voxel_octree_attr_neighbor_cpu(
     }
 
     // Pack the deltas into a uint8 tensor
-    torch::Tensor delta = torch::zeros({N, C}, torch::dtype(torch::kUInt8));
+    torch::Tensor delta = torch::zeros({static_cast<int64_t>(N), static_cast<int64_t>(C)}, torch::dtype(torch::kUInt8));
     uint8_t* delta_data = delta.data_ptr<uint8_t>();
     for (int i = 0; i < N; i++) {
         int x = coord_data[i * 3 + 0];
@@ -163,7 +163,7 @@ torch::Tensor decode_sparse_voxel_octree_attr_neighbor_cpu(
     }
 
     // Pack the attribute into a uint8 tensor
-    torch::Tensor attr = torch::zeros({N, C}, torch::dtype(torch::kUInt8));
+    torch::Tensor attr = torch::zeros({static_cast<int64_t>(N), static_cast<int64_t>(C)}, torch::dtype(torch::kUInt8));
     uint8_t* attr_data = attr.data_ptr<uint8_t>();
     for (int i = 0; i < N; i++) {
         int x = coord_data[i * 3 + 0];
