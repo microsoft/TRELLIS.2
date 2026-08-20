@@ -98,6 +98,11 @@ This fork includes a pip-first Windows path for Python 3.13, CUDA Toolkit 13.0, 
     powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1 -Python .\venv\Scripts\python.exe -CudaHome "D:\CUDA\v13.0"
     ```
 
+    If you are running from `cmd.exe` instead of PowerShell, use the bundled batch wrapper instead (it forwards all arguments to `setup_windows.ps1`):
+    ```bat
+    setup_windows.bat -Python .\venv\Scripts\python.exe
+    ```
+
     On Windows, TRELLIS.2 defaults to PyTorch SDPA for dense and sparse attention so `flash-attn` is not required. You can still override attention with `ATTN_BACKEND` or `SPARSE_ATTN_BACKEND`.
 
 4. Log in to Hugging Face before running the pretrained model. TRELLIS.2 loads gated dependencies, including `facebook/dinov3-vitl16-pretrain-lvd1689m`, so your account must have access:
