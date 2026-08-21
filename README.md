@@ -175,6 +175,11 @@ This fork includes a GitHub Actions workflow at [.github/workflows/ci-cd.yml](.g
 - **Checks performed**: validates dependency spec syntax in `requirements.txt` and `o-voxel/pyproject.toml`, then compiles Python sources (`compileall`) for a fast build smoke test.
 - **CD snapshot on `main`**: after a successful `main` push build, uploads a `build-manifest.json` artifact with commit/run metadata.
 
+This fork also includes a tag-triggered release workflow at [.github/workflows/release.yml](.github/workflows/release.yml):
+
+- **Release trigger**: pushes of tags matching `v*` (for example `v1.0.0`), plus optional manual `workflow_dispatch`.
+- **Release artifacts**: publishes `TRELLIS.2-<tag>.tar.gz`, `TRELLIS.2-<tag>.zip`, `checksums.sha256`, and a `build-manifest.json` file to the GitHub Release.
+
 ## 📦 Pretrained Weights
 
 The pretrained model **TRELLIS.2-4B** is available on Hugging Face. Please refer to the model card there for more details. The image encoder dependency `facebook/dinov3-vitl16-pretrain-lvd1689m` is gated on Hugging Face; authenticate with an account that has access before running the example or web demo.
