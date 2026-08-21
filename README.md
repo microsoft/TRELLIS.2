@@ -167,6 +167,14 @@ This fork includes a pip-first Windows path for Python 3.13, CUDA Toolkit 13.0, 
         --nvdiffrec             Install nvdiffrec
     ```
 
+## 🔁 CI/CD (Fork)
+
+This fork includes a GitHub Actions workflow at [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml):
+
+- **CI / PR build**: runs on every PR targeting `main` (opened/synchronize/reopened/ready_for_review), plus direct pushes to `main`.
+- **Checks performed**: validates dependency spec syntax in `requirements.txt` and `o-voxel/pyproject.toml`, then compiles Python sources (`compileall`) for a fast build smoke test.
+- **CD snapshot on `main`**: after a successful `main` push build, uploads a `build-manifest.json` artifact with commit/run metadata.
+
 ## 📦 Pretrained Weights
 
 The pretrained model **TRELLIS.2-4B** is available on Hugging Face. Please refer to the model card there for more details. The image encoder dependency `facebook/dinov3-vitl16-pretrain-lvd1689m` is gated on Hugging Face; authenticate with an account that has access before running the example or web demo.
