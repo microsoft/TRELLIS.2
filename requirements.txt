@@ -28,6 +28,9 @@ triton-windows
 utils3d @ git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
 nvdiffrast @ git+https://github.com/NVlabs/nvdiffrast.git@v0.4.0
 nvdiffrec_render @ git+https://github.com/JeffreyXiang/nvdiffrec.git@renderutils
-cumesh @ git+https://github.com/rwfsmith/CuMesh.git@windows-py313-cuda13
-flex_gemm @ git+https://github.com/rwfsmith/FlexGEMM.git@windows-py313-cuda13
+# Forks carrying Windows/CUDA-13 build fixes plus three cross-platform correctness
+# fixes (CuMesh PRs #39/#40/#41, FlexGEMM PR #31). Pinned to commit SHAs, not
+# branches, so a rebuild always reproduces the exact validated build.
+cumesh @ git+https://github.com/rwfsmith/CuMesh.git@44844ad5eea880d0a4218a7c99dbc44d1df33b67
+flex_gemm @ git+https://github.com/rwfsmith/FlexGEMM.git@c09f8e425e6a61edb7a209c5cc06f9f73254cde7
 ./o-voxel
