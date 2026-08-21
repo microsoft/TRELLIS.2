@@ -78,19 +78,36 @@ class DinoV3FeatureExtractor:
     def cpu(self):
         self.model.cpu()
 
+    def _encoder_layers(self):
+        """
+        Locate the transformer block list across transformers versions.
+
+        Older releases exposed the blocks directly on ``DINOv3ViTModel.layer``; current
+        releases nest them inside the encoder submodule (``DINOv3ViTModel.model.layer``).
+        """
+        for holder in (self.model, getattr(self.model, 'model', None), getattr(self.model, 'encoder', None)):
+            if holder is not None and hasattr(holder, 'layer'):
+                return holder.layer
+        return None
+
     def extract_features(self, image: torch.Tensor) -> torch.Tensor:
         image = image.to(self.model.embeddings.patch_embeddings.weight.dtype)
-        if not hasattr(self.model, 'layer'):
+        layers = self._encoder_layers()
+        if layers is None:
             return self.model(pixel_values=image, return_dict=True).last_hidden_state
 
         hidden_states = self.model.embeddings(image, bool_masked_pos=None)
         position_embeddings = self.model.rope_embeddings(image)
-        for i, layer_module in enumerate(self.model.layer):
+        for layer_module in layers:
             hidden_states = layer_module(
                 hidden_states,
                 position_embeddings=position_embeddings,
             )
 
+        # Parameter-free normalization of the pre-norm states. Do not substitute the
+        # backbone's trained final LayerNorm (``self.model.norm``): its learned affine
+        # shifts the feature distribution the flow models were conditioned on, which
+        # makes the sparse-structure sampler collapse to an empty grid on some seeds.
         return F.layer_norm(hidden_states, hidden_states.shape[-1:])
         
     @torch.no_grad()
