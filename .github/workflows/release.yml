@@ -1,0 +1,84 @@
+name: Release (tag)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.value }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Build release archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.value }}"
+          STAGE="release-stage"
+          OUT="release-out"
+          PKG="TRELLIS.2-${TAG}"
+          mkdir -p "$STAGE/$PKG" "$OUT"
+
+          rsync -a \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            ./ "$STAGE/$PKG/"
+
+          cat > "$OUT/build-manifest.json" <<JSON
+          {
+            "repo": "${{ github.repository }}",
+            "tag": "${TAG}",
+            "commit": "${{ github.sha }}",
+            "workflow": "${{ github.workflow }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}"
+          }
+          JSON
+
+          tar -C "$STAGE" -czf "$OUT/${PKG}.tar.gz" "$PKG"
+          (cd "$STAGE" && zip -r "../$OUT/${PKG}.zip" "$PKG" >/dev/null)
+          (cd "$OUT" && sha256sum "${PKG}.tar.gz" "${PKG}.zip" > checksums.sha256)
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.value }}
+          generate_release_notes: true
+          files: |
+            release-out/*.tar.gz
+            release-out/*.zip
+            release-out/checksums.sha256
+            release-out/build-manifest.json

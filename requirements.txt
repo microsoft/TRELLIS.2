@@ -1,0 +1,35 @@
+--extra-index-url https://download.pytorch.org/whl/cu130
+
+torch==2.13.0+cu130
+torchvision==0.28.0+cu130
+numpy<2.3.0,>=2
+pillow
+imageio
+imageio-ffmpeg
+tqdm
+easydict
+opencv-python-headless==4.12.0.88
+ninja
+trimesh
+transformers
+gradio==6.0.1
+tensorboard
+pandas
+lpips
+zstandard
+kornia
+timm
+safetensors
+huggingface_hub
+requests
+plyfile
+matplotlib
+triton-windows
+utils3d @ git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
+nvdiffrast @ git+https://github.com/NVlabs/nvdiffrast.git@v0.4.0
+nvdiffrec_render @ git+https://github.com/JeffreyXiang/nvdiffrec.git@renderutils
+# Forks carrying Windows/CUDA-13 build fixes plus cross-platform correctness
+# fixes. Pinned to commit SHAs so a rebuild reproduces the validated build.
+cumesh @ git+https://github.com/rwfsmith/CuMesh.git@683440c8d3959653384647e7bb7218dbd99eecca
+flex_gemm @ git+https://github.com/rwfsmith/FlexGEMM.git@7598fe133f5b1425d5624b4c00e1f381412b96ce
+./o-voxel

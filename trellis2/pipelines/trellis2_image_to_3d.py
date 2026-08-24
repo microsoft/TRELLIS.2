@@ -231,6 +231,12 @@ class Trellis2ImageTo3DPipeline(Pipeline):
             ratio = decoded.shape[2] // resolution
             decoded = torch.nn.functional.max_pool3d(decoded.float(), ratio, ratio, 0) > 0.5
         coords = torch.argwhere(decoded)[:, [0, 2, 3, 4]].int()
+        if coords.shape[0] == 0:
+            raise RuntimeError(
+                "The sparse structure sampler produced an empty voxel grid, so there is no "
+                "geometry to generate. Try a different seed, or an input image with a clearly "
+                "segmented foreground object."
+            )
 
         return coords
 

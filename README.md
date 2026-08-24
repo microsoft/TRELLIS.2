@@ -64,6 +64,74 @@ Data processing is streamlined for instant conversions that are fully **renderin
   - Python version 3.8 or higher is required. 
 
 ### Installation Steps
+
+#### Windows (Python 3.13 + RTX 50-series / Blackwell)
+This fork includes a pip-first Windows path for Python 3.13, CUDA Toolkit 13.0, PyTorch `2.13.0+cu130`, and NVIDIA RTX 50-series / Blackwell GPUs (`sm_120`). Conda is not required.
+
+1. Clone the repo and initialize submodules:
+    ```powershell
+    git clone -b windows-blackwell https://github.com/rwfsmith/TRELLIS.2.git --recursive
+    cd TRELLIS.2
+    git submodule update --init --recursive
+    ```
+
+2. Create and activate a Python 3.13 virtual environment:
+    ```powershell
+    py -3.13 -m venv venv
+    .\venv\Scripts\Activate.ps1
+    python -m pip install --upgrade pip setuptools wheel
+    ```
+
+3. Install Visual Studio 2022 C++ build tools and CUDA Toolkit 13.0. Then install dependencies:
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1 -Python .\venv\Scripts\python.exe
+    ```
+    The setup script wraps:
+    ```powershell
+    python -m pip install -r requirements.txt --no-build-isolation
+    ```
+    and sets the native build environment variables needed by PyTorch CUDA extensions:
+    `CUDA_HOME`, `TORCH_CUDA_ARCH_LIST=12.0`, `DISTUTILS_USE_SDK=1`, and `MSSdk=1`.
+
+    If CUDA is installed somewhere other than `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.0`, pass it explicitly:
+    ```powershell
+    powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1 -Python .\venv\Scripts\python.exe -CudaHome "D:\CUDA\v13.0"
+    ```
+
+    If you are running from `cmd.exe` instead of PowerShell, use the bundled batch wrapper instead (it forwards all arguments to `setup_windows.ps1`):
+    ```bat
+    setup_windows.bat -Python .\venv\Scripts\python.exe
+    ```
+
+    Alternatively, a pure Python setup script is provided for those who prefer not to invoke PowerShell or a `.bat` file at all:
+    ```
+    python setup_windows.py --python .\venv\Scripts\python.exe
+    ```
+    It performs the same steps as `setup_windows.ps1` (locate VS2022 build tools, set `CUDA_HOME`/`TORCH_CUDA_ARCH_LIST`, then `pip install -r requirements.txt --no-build-isolation`). Use `--cuda-home` and `--torch-cuda-arch-list` to override the CUDA path or target GPU architecture.
+
+    On Windows, TRELLIS.2 does not require `flash-attn`: at startup it probes whether `flash_attn` is installed and actually runs on your GPU, and automatically falls back to PyTorch SDPA if it's missing or fails. If you install a working `flash-attn` build, it will be used automatically; you can still force a specific backend with `ATTN_BACKEND` or `SPARSE_ATTN_BACKEND` (`xformers`, `flash_attn`, `flash_attn_3`, `sdpa`, `naive`).
+
+    This fork's `requirements.txt` pins `cumesh` and `flex_gemm` to exact commits of [rwfsmith/CuMesh](https://github.com/rwfsmith/CuMesh) and [rwfsmith/FlexGEMM](https://github.com/rwfsmith/FlexGEMM). Besides the Windows/CUDA-13 build fixes, those commits carry two **cross-platform correctness fixes** to CuMesh that are not specific to this fork's platform support:
+
+    - **Out-of-bounds UDF read in the narrow-band dual contouring remesh kernel.** Caused `o_voxel.postprocess.to_glb(..., remesh=True)` (used by `extract_glb()` in `app.py`) to non-deterministically produce shredded/spiky meshes — identical code and latents could yield a clean or corrupted mesh from run to run. Upstreamed as [CuMesh#39](https://github.com/JeffreyXiang/CuMesh/pull/39).
+    - **Uninitialized CUB reduction identity in `fill_holes`.** `fill_holes` averages hole-cap vertices with `cub::DeviceSegmentedReduce::Sum` over `Vec3f`. CUB builds the reduction identity on the *host* as `InitT{}`, but `Vec3f` has a user-provided default constructor (so `Vec3f{}` calls it instead of zero-filling) that is marked `__device__`-only (so it isn't callable from host code). The identity was therefore raw host stack memory, folded into every segment sum. Because it depends on stack residue, the first generation in a process was usually clean and **every generation after it was corrupt**, smearing the model into a cylindrical column of sliver triangles — so it only showed up from the second image onward in the long-lived Gradio app. Upstreamed as [CuMesh#41](https://github.com/JeffreyXiang/CuMesh/pull/41).
+
+    If you see corrupted meshes, verify you are building against these pinned commits rather than upstream `main`.
+
+    This fork also fixes the DINOv3 image conditioning for Transformers 5.x. Recent releases moved the DINOv3 transformer blocks from `DINOv3ViTModel.layer` to `DINOv3ViTModel.model.layer`, so the original lookup missed them. Falling back to `last_hidden_state` is *not* equivalent: `DINOv3ViTModel.forward` applies the backbone's trained final `LayerNorm`, whose learned affine shifts the feature distribution TRELLIS.2 was conditioned on. The resulting out-of-distribution conditioning made the sparse-structure flow sampler collapse to an all-empty voxel grid on roughly 1 seed in 6, surfacing 300 lines downstream as a cryptic `RuntimeError: max(): Expected reduction dim to be specified for input.numel() == 0`. `DinoV3FeatureExtractor.extract_features` now locates the block list across Transformers versions, runs the blocks directly, and applies a parameter-free `F.layer_norm`. On a fixed 40-seed sweep this took empty-grid failures from 7/40 to 0/40 and tightened the generated voxel count from 139–2169 to 3299–4338, so it improves output fidelity on every seed, not just the ones that crashed.
+
+4. Log in to Hugging Face before running the pretrained model. TRELLIS.2 loads gated dependencies, including `facebook/dinov3-vitl16-pretrain-lvd1689m`, so your account must have access:
+    ```powershell
+    huggingface-cli login
+    ```
+
+5. Run the full image-to-3D example:
+    ```powershell
+    python example.py
+    ```
+    A successful run writes `sample.mp4` and `sample.glb`.
+
+#### Linux
 1. Clone the repo:
     ```sh
     git clone -b main https://github.com/microsoft/TRELLIS.2.git --recursive
@@ -99,9 +167,22 @@ Data processing is streamlined for instant conversions that are fully **renderin
         --nvdiffrec             Install nvdiffrec
     ```
 
+## 🔁 CI/CD (Fork)
+
+This fork includes a GitHub Actions workflow at [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml):
+
+- **CI / PR build**: runs on every PR targeting `main` (opened/synchronize/reopened/ready_for_review), plus direct pushes to `main`.
+- **Checks performed**: validates dependency spec syntax in `requirements.txt` and `o-voxel/pyproject.toml`, then compiles Python sources (`compileall`) for a fast build smoke test.
+- **CD snapshot on `main`**: after a successful `main` push build, uploads a `build-manifest.json` artifact with commit/run metadata.
+
+This fork also includes a tag-triggered release workflow at [.github/workflows/release.yml](.github/workflows/release.yml):
+
+- **Release trigger**: pushes of tags matching `v*` (for example `v1.0.0`), plus optional manual `workflow_dispatch`.
+- **Release artifacts**: publishes `TRELLIS.2-<tag>.tar.gz`, `TRELLIS.2-<tag>.zip`, `checksums.sha256`, and a `build-manifest.json` file to the GitHub Release.
+
 ## 📦 Pretrained Weights
 
-The pretrained model **TRELLIS.2-4B** is available on Hugging Face. Please refer to the model card there for more details.
+The pretrained model **TRELLIS.2-4B** is available on Hugging Face. Please refer to the model card there for more details. The image encoder dependency `facebook/dinov3-vitl16-pretrain-lvd1689m` is gated on Hugging Face; authenticate with an account that has access before running the example or web demo.
 
 | Model | Parameters | Resolution | Link |
 | :--- | :--- | :--- | :--- |

@@ -205,3 +205,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# app.py runtime output
+tmp/
+
+# example.py generated output
+sample.mp4
+sample.glb
