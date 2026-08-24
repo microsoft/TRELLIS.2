@@ -25,8 +25,8 @@ else:
     cc_flag = [f"--offload-arch={arch}" for arch in archs]
 
 if IS_WINDOWS:
-    cxx_flags = ["/O2", "/std:c++20", "/EHsc", "/permissive-", "/Zc:__cplusplus"]
-    nvcc_flags = ["-O3", "-std=c++20", "--expt-relaxed-constexpr", "--extended-lambda", "-allow-unsupported-compiler", "-Xcompiler=/std:c++20", "-Xcompiler=/EHsc", "-Xcompiler=/permissive-", "-Xcompiler=/Zc:__cplusplus"] + cc_flag
+    cxx_flags = ["/O2", "/std:c++17", "/EHsc", "/permissive-", "/Zc:__cplusplus"]
+    nvcc_flags = ["-O3", "-std=c++17", "--expt-relaxed-constexpr", "--extended-lambda", "-allow-unsupported-compiler", "-Xcompiler=/std:c++17", "-Xcompiler=/EHsc", "-Xcompiler=/permissive-", "-Xcompiler=/Zc:__cplusplus"] + cc_flag
 else:
     cxx_flags = ["-O3", "-std=c++17"]
     nvcc_flags = ["-O3", "-std=c++17"] + cc_flag
