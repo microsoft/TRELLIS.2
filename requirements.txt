@@ -1,0 +1,19 @@
+imageio
+imageio-ffmpeg
+tqdm
+easydict
+opencv-python-headless
+ninja
+trimesh
+transformers
+zstandard
+pillow
+kornia
+timm
+utils3d @ git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
+flash-attn==2.7.3
+nvdiffrast @ git+https://github.com/NVlabs/nvdiffrast.git@v0.4.0
+nvdiffrec @ git+https://github.com/JeffreyXiang/nvdiffrec.git@renderutils
+cumesh @ git+https://github.com/JeffreyXiang/CuMesh.git
+flex_gemm @ git+https://github.com/JeffreyXiang/FlexGEMM.git
+./o-voxel
