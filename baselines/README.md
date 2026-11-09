@@ -6,6 +6,8 @@
 | `evaluate_uv.py` | Per-channel MAE / PSNR (base color, roughness, metallic) in UV space against `<base>_pbr.glb` (dataset layout: `<object>/pbr.glb` next to `<object>/<hdr>_rot<deg>.glb`), on the texels covered by the UV layout. Parts are matched by geometry, since exported part names can differ. |
 | `evaluate_relit.py` | Renders prediction and ground truth with the TRELLIS.2 PBR renderer under every HDR in `env_maps/` except the one the input was baked with, from 4 views; MAE / PSNR on object pixels, SSIM and LPIPS on the full image. Takes any GLB with the input geometry (`--pred-glb`), so it can be reused for other methods. |
 | `summarize.py` | Mean ± std of the metrics over several runs (e.g. seeds). |
+| `compare.py` | Table of the UV and relighting metrics of several methods on the assets they have in common. |
+| `figure.py` | Qualitative comparison figure from the relighting renders of several methods. |
 | `run_unguided.sh` | Baseline and both evaluations on a dataset folder. |
 
 Both evaluations also report an input-as-albedo reference (baked texture as base color, roughness 0.5, metallic 0).
