@@ -3,7 +3,7 @@
 | File | Purpose |
 |---|---|
 | `unguided_trellis2.py` | Unguided TRELLIS.2 baseline. Runs the material stage conditioned on the geometry and one render of the baked asset, then bakes the voxel materials into the original UV layout. |
-| `evaluate_uv.py` | Per-channel MAE / PSNR (base color, roughness, metallic) in UV space against `<base>_pbr.glb`, on the texels covered by the UV layout. |
+| `evaluate_uv.py` | Per-channel MAE / PSNR (base color, roughness, metallic) in UV space against `<base>_pbr.glb` (dataset layout: `<object>/pbr.glb` next to `<object>/<hdr>_rot<deg>.glb`), on the texels covered by the UV layout. Parts are matched by geometry, since exported part names can differ. |
 | `evaluate_relit.py` | Renders prediction and ground truth with the TRELLIS.2 PBR renderer under every HDR in `env_maps/` from 4 views; MAE / PSNR on object pixels, SSIM and LPIPS on the full image. Takes any GLB with the input geometry (`--pred-glb`), so it can be reused for other methods. |
 | `summarize.py` | Mean ± std of the metrics over several runs (e.g. seeds). |
 | `run_unguided.sh` | Baseline and both evaluations on a dataset folder. |

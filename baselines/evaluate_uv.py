@@ -31,6 +31,24 @@ from unguided_trellis2 import load_parts
 CHANNELS = ["basecolor", "roughness", "metallic"]
 
 
+def locate(meta_path, gt_dir=None, gt_pattern="{base}_pbr.glb"):
+    """(baked input, ground truth, HDR the input was baked with or None) for one result folder.
+    Supports <base>_baked.glb next to <base>_pbr.glb (+ optional <base>_bake.json) and the
+    dataset layout <object>/<hdr>_rot<deg>.glb next to <object>/pbr.glb + meta.json."""
+    inp = Path(json.loads(Path(meta_path).read_text())["input"])
+    base = inp.stem[:-len("_baked")] if inp.stem.endswith("_baked") else inp.stem
+    folder = Path(gt_dir) if gt_dir else inp.parent
+    gt = next((p for p in [folder / gt_pattern.format(base=base), folder / "pbr.glb"] if p.exists()), None)
+    env = None
+    if (folder / f"{base}_bake.json").exists():
+        env = json.loads((folder / f"{base}_bake.json").read_text()).get("envmap")
+    elif (inp.parent / "meta.json").exists():
+        entries = json.loads((inp.parent / "meta.json").read_text())
+        hit = [e for e in entries if isinstance(e, dict) and e.get("name") == inp.stem]
+        env = Path(hit[0]["env_map"]).stem if hit and hit[0].get("env_map") else None
+    return inp, gt, env
+
+
 def gt_maps(path):
     """{frozenset(part names): {"basecolor", "roughness", "metallic", "mask"}} per texture atlas."""
     parts = load_parts(path)
@@ -97,11 +115,13 @@ def evaluate_asset(pred_dir, gt_path, baked_path, args):
     meta = json.loads((pred_dir / "meta.json").read_text())
     gts = gt_maps(gt_path)
     pred_rows, ref_rows, weights = [], [], []
-    baked = None
-    if baked_path is not None and baked_path.exists():
-        baked = {frozenset(p["name"] for p in g): g[0]["texture"] for g in _group(load_parts(baked_path))}
+    # part names of the baked input and the ground truth can differ (e.g. "x.001" vs "x_1"),
+    # so parts are matched by geometry
+    baked_parts = load_parts(baked_path)
+    names = match_parts(baked_parts, load_parts(gt_path))
+    baked = {frozenset(names[p["name"]] for p in g): g[0]["texture"] for g in _group(baked_parts)}
     for atlas in meta["atlases"]:
-        key = frozenset(atlas["parts"])
+        key = frozenset(names.get(n, n) for n in atlas["parts"])
         gt = gts.get(key)
         if gt is None:
             raise ValueError(f"no ground-truth atlas with parts {sorted(key)} in {gt_path}")
@@ -124,6 +144,23 @@ def evaluate_asset(pred_dir, gt_path, baked_path, args):
     if ref_rows and len(ref_rows) == len(pred_rows):
         res["input_as_albedo"] = _weighted(ref_rows, weights)
     return res
+
+
+def match_parts(src, dst):
+    """Map part names of src to dst: same face count, closest face-centroid mean and extent
+    (robust to different vertex splitting on export); the name is the fallback."""
+    def sig(p):
+        m = p["mesh"]
+        return len(m.faces), np.concatenate([m.triangles_center.mean(0), np.ptp(m.vertices, 0)])
+    dst_sig = [(p["name"], *sig(p)) for p in dst]
+    scale = max(float(np.ptp(np.concatenate([np.asarray(p["mesh"].vertices) for p in dst]), 0).max()), 1e-8)
+    out = {}
+    for p in src:
+        n_f, s = sig(p)
+        cands = [(np.abs(s - ds).max(), name) for name, dn, ds in dst_sig if dn == n_f]
+        best = min(cands, default=(np.inf, None))
+        out[p["name"]] = best[1] if best[0] < 1e-2 * scale else p["name"]
+    return out
 
 
 def _group(parts):
@@ -149,8 +186,7 @@ def main():
     ap.add_argument("--pred", required=True, help="results folder of one method (one subfolder per asset)")
     ap.add_argument("--gt-dir", default=None, help="folder with the ground-truth and baked assets "
                     "(default: the folder of each baked input)")
-    ap.add_argument("--gt-pattern", default="{base}_pbr.glb")
-    ap.add_argument("--baked-pattern", default="{base}_baked.glb")
+    ap.add_argument("--gt-pattern", default="{base}_pbr.glb", help="falls back to pbr.glb in the same folder")
     ap.add_argument("--ref-roughness", type=float, default=0.5, help="input-as-albedo reference")
     ap.add_argument("--ref-metallic", type=float, default=0.0, help="input-as-albedo reference")
     args = ap.parse_args()
@@ -159,16 +195,12 @@ def main():
     results = {}
     for meta_path in sorted(pred_root.glob("*/meta.json")):
         pred_dir = meta_path.parent
-        inp = Path(json.loads(meta_path.read_text())["input"])
-        stem = inp.stem
-        gt_dir = Path(args.gt_dir) if args.gt_dir else inp.parent
-        base = stem[:-len("_baked")] if stem.endswith("_baked") else stem
-        gt_path = gt_dir / args.gt_pattern.format(base=base)
-        if not gt_path.exists():
-            print(f"skip {pred_dir.name}: no ground truth {gt_path}")
+        inp, gt_path, _ = locate(meta_path, args.gt_dir, args.gt_pattern)
+        if gt_path is None:
+            print(f"skip {pred_dir.name}: no ground truth next to {inp}")
             continue
         try:
-            results[pred_dir.name] = evaluate_asset(pred_dir, gt_path, gt_dir / args.baked_pattern.format(base=base), args)
+            results[pred_dir.name] = evaluate_asset(pred_dir, gt_path, inp, args)
         except Exception as e:
             print(f"FAILED {pred_dir.name}: {type(e).__name__}: {e}")
     if not results:
