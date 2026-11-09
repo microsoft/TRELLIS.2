@@ -31,6 +31,7 @@ import torch.nn.functional as F
 from PIL import Image
 
 from unguided_trellis2 import load_parts, normalization, normalize
+from evaluate_uv import locate
 from trellis2.renderers import PbrMeshRenderer, EnvMap
 from trellis2.representations.mesh.base import MeshWithPbrMaterial, PbrMaterial, Texture
 from trellis2.utils.render_utils import yaw_pitch_r_fov_to_extrinsics_intrinsics
@@ -119,8 +120,7 @@ def main():
     ap.add_argument("--pred", required=True, help="results folder of one method (one subfolder per asset)")
     ap.add_argument("--gt-dir", default=None, help="folder with the ground-truth and baked assets "
                     "(default: the folder of each baked input)")
-    ap.add_argument("--gt-pattern", default="{base}_pbr.glb")
-    ap.add_argument("--baked-pattern", default="{base}_baked.glb")
+    ap.add_argument("--gt-pattern", default="{base}_pbr.glb", help="falls back to pbr.glb in the same folder")
     ap.add_argument("--pred-glb", default="textured.glb", help="file name of the prediction in each asset folder")
     ap.add_argument("--envmaps", default=str(Path(__file__).resolve().parents[1] / "env_maps"),
                     help="folder with .exr/.hdr environment maps")
@@ -146,14 +146,10 @@ def main():
     results = {}
     for meta_path in sorted(pred_root.glob("*/meta.json")):
         pred_dir = meta_path.parent
-        inp = Path(json.loads(meta_path.read_text())["input"])
-        stem = inp.stem
-        gt_dir = Path(args.gt_dir) if args.gt_dir else inp.parent
-        base = stem[:-len("_baked")] if stem.endswith("_baked") else stem
-        gt_path, baked_path = gt_dir / args.gt_pattern.format(base=base), gt_dir / args.baked_pattern.format(base=base)
+        baked_path, gt_path, skip = locate(meta_path, args.gt_dir, args.gt_pattern)  # skip: HDR used for baking
         pred_path = pred_dir / args.pred_glb
-        if not gt_path.exists() or not pred_path.exists():
-            print(f"skip {pred_dir.name}: missing {gt_path if not gt_path.exists() else pred_path}")
+        if gt_path is None or not pred_path.exists():
+            print(f"skip {pred_dir.name}: missing ground truth or {pred_path}")
             continue
         center, scale = normalization(np.concatenate([p["mesh"].vertices for p in load_parts(gt_path)]))
         meshes = {"gt": glb_to_pbr_mesh(gt_path, center, scale), "pred": glb_to_pbr_mesh(pred_path, center, scale)}
@@ -166,6 +162,8 @@ def main():
             renders = {m: renderer.render(mesh, e, i, envmaps) for m, mesh in meshes.items()}
             mask = renders["gt"].mask > 0.5
             for k, name in enumerate(envmaps):
+                if name == skip:
+                    continue
                 gt_img = renders["gt"][f"shaded_{name}"].clamp(0, 1)
                 for m in scores:
                     scores[m].append(scorer(renders[m][f"shaded_{name}"].clamp(0, 1), gt_img, mask))
