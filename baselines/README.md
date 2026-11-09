@@ -11,6 +11,7 @@
 | `run_unguided.sh` | Baseline and both evaluations on a dataset folder. |
 | `supermat.py` | SuperMat baseline: 6 orthographic renders of the baked asset, multi-view prediction, back-projection into the original UV layout and SuperMat's UV refinement. |
 | `material_anything.py` | Material Anything baseline in its mode for textured meshes (36 views, UV refinement); needs `patches/material_anything_skip_controlnet.patch` in the MA repo. |
+| `rgbx.py` | RGB↔X baseline: per-view RGB→X predictions on the SuperMat views, back-projected into the UV layout, with their spread across views. |
 
 Both evaluations also report an input-as-albedo reference (baked texture as base color, roughness 0.5, metallic 0).
 
