@@ -9,6 +9,7 @@
 | `compare.py` | Table of the UV and relighting metrics of several methods on the assets they have in common. |
 | `figure.py` | Qualitative comparison figure from the relighting renders of several methods. |
 | `run_unguided.sh` | Baseline and both evaluations on a dataset folder. |
+| `supermat.py` | SuperMat baseline: 6 orthographic renders of the baked asset, multi-view prediction, back-projection into the original UV layout and SuperMat's UV refinement. |
 
 Both evaluations also report an input-as-albedo reference (baked texture as base color, roughness 0.5, metallic 0).
 
