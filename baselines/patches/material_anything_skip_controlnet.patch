@@ -1,0 +1,51 @@
+diff --git a/scripts/generate_texture_pbr_3d.py b/scripts/generate_texture_pbr_3d.py
+index c0e4f61..0a755e9 100644
+--- a/scripts/generate_texture_pbr_3d.py
++++ b/scripts/generate_texture_pbr_3d.py
+@@ -171,6 +171,7 @@ def init_args():
+         help="the angle between the vector from the object to the camera and the horizontal plane")
+     parser.add_argument("--azim", type=float, default=180,
+         help="the angle between the vector from the object to the camera and the vertical plane")
++    parser.add_argument("--skip_controlnet", action="store_true", help="skip the ControlNet repaint, whose result is not used for textured meshes")
+     parser.add_argument("--image2materials_model", type=str, default="./pretrained_models/material_estimator")
+     parser.add_argument("--uvrefine_model", type=str, default="./pretrained_models/material_refiner")
+ 
+@@ -265,7 +266,7 @@ if __name__ == "__main__":
+     save_args(args, output_dir)
+ 
+     # initialize depth2image model
+-    controlnet, ddim_sampler = get_controlnet_depth()
++    controlnet, ddim_sampler = (None, None) if args.skip_controlnet else get_controlnet_depth()
+     materialSD = get_image2materials(args.image2materials_model, DEVICE)
+     uvrefiner = get_uvrefiner(args.uvrefine_model, DEVICE)
+ 
+@@ -423,13 +424,14 @@ if __name__ == "__main__":
+             actual_generate_mask_image = generate_mask_image
+ 
+         print("=> generate for view {}".format(view_idx))
+-        generate_image, generate_image_before, generate_image_after = apply_controlnet_depth(controlnet, ddim_sampler, 
+-            init_image.convert("RGBA"), prompt, args.new_strength, args.ddim_steps,
+-            actual_generate_mask_image, keep_mask_image, depth_maps_tensor.permute(1, 2, 0).repeat(1, 1, 3).cpu().numpy(), 
+-            args.a_prompt, args.n_prompt, args.guidance_scale, args.seed, args.eta, 1, DEVICE, args.blend)
++        if not args.skip_controlnet:  # its output is overwritten by init_image right below
++            generate_image, generate_image_before, generate_image_after = apply_controlnet_depth(controlnet, ddim_sampler, 
++                init_image.convert("RGBA"), prompt, args.new_strength, args.ddim_steps,
++                actual_generate_mask_image, keep_mask_image, depth_maps_tensor.permute(1, 2, 0).repeat(1, 1, 3).cpu().numpy(), 
++                args.a_prompt, args.n_prompt, args.guidance_scale, args.seed, args.eta, 1, DEVICE, args.blend)
+ 
+-        generate_image_before.save(os.path.join(inpainted_image_dir, "{}_before.png".format(view_idx)))
+-        generate_image_after.save(os.path.join(inpainted_image_dir, "{}_after.png".format(view_idx)))
++            generate_image_before.save(os.path.join(inpainted_image_dir, "{}_before.png".format(view_idx)))
++            generate_image_after.save(os.path.join(inpainted_image_dir, "{}_after.png".format(view_idx)))
+ 
+         # set the background of generate_image to white using all_mask_tensor
+         generate_image_np = np.array(init_image)
+@@ -528,8 +530,6 @@ if __name__ == "__main__":
+         bump_image.save(os.path.join(material_dir, "{}_bump_after.png".format(view_idx)))
+         
+ 
+-        project_mask_image.save(os.path.join(mask_image_dir, "{}_project.png".format(view_idx)))
+-
+         # update the mesh
+         mesh.textures = TexturesUV(
+             maps=transforms.ToTensor()(init_texture)[None, ...].permute(0, 2, 3, 1).to(DEVICE),
